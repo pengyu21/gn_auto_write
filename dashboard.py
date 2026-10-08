@@ -32,6 +32,7 @@ from core.board import ROOT, load_settings
 from unni import job, schedule
 from unni.login import run_state
 from unni.scheduler import Scheduler
+from version import VERSION
 
 UI = ROOT / "ui" / "dashboard.html"
 STATE_FILE = ROOT / "login_state.json"
@@ -103,6 +104,9 @@ class Api:
         return {"year": year, "month": month, "today": today.isoformat(),
                 "start": self._start.isoformat() if self._start else None,
                 "offset": schedule.first_offset(year, month), "days": days}
+
+    def version(self) -> str:
+        return VERSION
 
     def phones(self) -> dict:
         return {str(k): v for k, v in load_state().items()}
