@@ -3,7 +3,7 @@
 폰보드(60~99번 안드로이드 40대)로 강남언니(unni.app) 커뮤니티 글을 시트 일정대로 올리고,
 다음 차례에 지난 글을 지운 뒤 새로 올리는 자동화 + 데스크톱 대시보드.
 
-**현재 버전: v1.0** — 바뀐 내용은 [CHANGELOG.md](CHANGELOG.md). 버전 숫자는 `version.py` 한 곳에서 바꿉니다.
+**현재 버전: v1.1** — 바뀐 내용은 [CHANGELOG.md](CHANGELOG.md). 버전 숫자는 `version.py` 한 곳에서 바꿉니다.
 
 ## 구성
 
@@ -49,9 +49,22 @@
 
 | 키 | 뜻 |
 |---|---|
-| `auto_from`, `auto_until` | 이 기간에만 자동 실행 |
+| `auto_from`, `auto_until` | 이 기간에만 자동 실행 (`auto_until` 을 비우면 끝없이) |
 | `rotation_start` | 이 날 이전은 대시보드에서 '기록 없음' 으로 표시 |
 | `skip_boards` | 자동 실행에서 뺄 폰 번호 목록 (예: 인터넷 안 되는 폰) |
+| `telegram_token`, `telegram_chat_id` | 업로드 실패·실행 알림을 보낼 텔레그램 봇과 대화방 |
+
+## 알림
+
+| 언제 | 어디로 | 누가 보냄 |
+|---|---|---|
+| 자동 실행 작업 실패 | 텔레그램 | 프로그램 (`unni/notify.py`) |
+| 대시보드 실행됨 | 텔레그램 | 프로그램 |
+| 프로그램 멈춤 (M1 이 15분 넘게 그대로) / 복구 | 메일 + 텔레그램 | 시트 Apps Script (`appsscript/Watch.gs`) |
+
+멈춤 알림 설정: 시트 → 확장 프로그램 → Apps Script → 새 파일 `Watch` 에 `appsscript/Watch.gs` 붙여넣기 →
+프로젝트 설정 → 스크립트 속성 `WATCH_TELEGRAM_TOKEN`, `WATCH_TELEGRAM_CHAT`, `WATCH_EMAIL` →
+`installWatch` 한 번 실행·권한 승인. 토큰·메일은 코드에 쓰지 않습니다.
 
 ## 명령줄
 

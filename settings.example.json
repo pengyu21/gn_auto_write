@@ -6,6 +6,9 @@
     "sheet_token": "<Code.gs 의 토큰 — 절대 공개 저장소에 올리지 말 것>",
     "rotation_start": "2026-10-08",
     "auto_from": "2026-10-08",
-    "auto_until": "2026-10-12",
-    "skip_boards": [91]
+    "auto_until": "",
+    "skip_boards": [91],
+    "telegram_token": "<텔레그램 봇 토큰 — 공개 저장소에 올리지 말 것>",
+    "telegram_chat_id": 0,
+    "alert_email": "<알림 받을 메일>"
 }

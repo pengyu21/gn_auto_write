@@ -26,7 +26,7 @@ from typing import Callable, Optional
 
 from core.board import ROOT, Board, load_settings
 from core.sheet import Sheet
-from . import job, login, schedule
+from . import job, login, notify, schedule
 
 PLAN = ROOT / "run_plan.json"
 MAX_MINUTE = 40                 # 시간대 안에서 시작 분 범위 0~40 (끝나기 전에 마치도록)
@@ -97,6 +97,8 @@ class Scheduler:
     def start(self):
         if self._thread:
             return
+        # 켜질 때 한 번: 재부팅·재실행을 알 수 있게
+        notify.telegram_async(f"▶️ 대시보드 실행됨 — 자동 실행 {'켜짐' if self.enabled else '꺼짐'}")
         self._thread = threading.Thread(target=self._loop, daemon=True, name="scheduler")
         self._thread.start()
 
@@ -167,16 +169,21 @@ class Scheduler:
             self._mark(d, k, "시작")
         self.on_change()
 
+        where = f"{j.board}번 {j.week}주차 {j.day} {j.hour}시 (로테 {j.rotation}, {j.surgery})"
+
         def work():
             try:
                 r = job.run_key(k, log=self.log)
                 if not manual:
                     self._mark(d, k, "성공" if r.get("ok") else f"실패: {r.get('error', '')}")
+                if not r.get("ok"):
+                    notify.telegram_async(f"⚠️ 업로드 실패\n{where}\n이유: {r.get('error', '')}")
             except Exception as exc:                 # noqa: BLE001
                 self.log(f"!! {j.board}번 작업 중 오류: {type(exc).__name__}: {exc}")
                 traceback.print_exc()
                 if not manual:
                     self._mark(d, k, f"실패: {exc}")
+                notify.telegram_async(f"⚠️ 작업 중 오류\n{where}\n{type(exc).__name__}: {exc}")
             finally:
                 with self._lock:
                     self.busy.pop(j.board, None)
