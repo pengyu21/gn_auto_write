@@ -1,0 +1,11 @@
+{
+    "adb_path": "C:\\Program Files (x86)\\xiaowei_android\\tools\\adb.exe",
+    "adb_ports": [5037, 5038],
+    "max_parallel": 40,
+    "sheet_url": "https://script.google.com/macros/s/<웹앱 배포 ID>/exec",
+    "sheet_token": "<Code.gs 의 토큰 — 절대 공개 저장소에 올리지 말 것>",
+    "rotation_start": "2026-10-08",
+    "auto_from": "2026-10-08",
+    "auto_until": "2026-10-12",
+    "skip_boards": [91]
+}

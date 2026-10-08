@@ -1,0 +1,24 @@
+# ── 절대 올리면 안 되는 것 (공개 저장소) ──────────────────────────────
+# 시트 웹앱 주소·토큰: 이걸 알면 누구나 '강언아이디' 탭(아이디/비밀번호)을 읽고 쓸 수 있음
+settings.json
+# 계정 아이디·닉네임, 폰 로그인 상태
+account_nicks.json
+login_state.json
+# 폰 시리얼 -> 번호 표
+roster.csv
+# 실행 기록 / 키보드 백업 (PC 마다 다름)
+run_plan.json
+ime_backup.json
+# 시트 백업(게시글·계정 기록 포함)
+*백업*.json
+*.backup.json
+# 폰 화면 캡처 원본 (수백 MB)
+raw/
+
+# ── 그 밖 ──────────────────────────────────────────────────────────
+__pycache__/
+*.pyc
+*.lnk
+dashboard_tk.py
+.vscode/
+.idea/

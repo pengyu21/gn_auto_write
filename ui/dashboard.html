@@ -1,0 +1,579 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>강언 로테이션 대시보드</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap">
+<style>
+/* 운영자 대시보드 — 위 상태줄, 왼쪽 그날 작업(3단계 파이프라인), 오른쪽 폰보드 40칸, 아래 달력과 로그. 상세는 오른쪽 서랍. */
+:root{
+  --bg:#EDF1F0; --panel:#FFFFFF; --panel-2:#F5F8F7; --ink:#15201E; --muted:#5C6966; --line:#D6DEDC; --accent:#0B6B63;
+  --ok:#1D8549; --ok-bg:#E1F3E8; --fail:#C4342A; --fail-bg:#FBE5E2; --run:#2460C4; --run-bg:#E2EBFA;
+  --wait:#76827F; --wait-bg:#ECF0EF; --hold:#9A6F12; --hold-bg:#F7EED6; --gone:#6B7573; --gone-bg:#DDE2E1;
+  --r1:#2D6CDF; --r2:#0E8C7E; --r3:#B9700F; --r4:#7A4BD8; --r5:#B8336A;
+  --f-body:"IBM Plex Sans KR","Malgun Gothic","맑은 고딕",system-ui,sans-serif;
+  --f-num:"JetBrains Mono",Consolas,ui-monospace,monospace;
+  --shadow:0 1px 0 rgba(20,40,36,.04),0 6px 18px -12px rgba(20,40,36,.25);
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:14px;line-height:1.5}
+.wrap{max-width:1600px;margin:0 auto;padding:16px;display:grid;gap:14px}
+.num{font-family:var(--f-num);font-variant-numeric:tabular-nums}
+button{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+.top{display:flex;flex-wrap:wrap;align-items:center;gap:12px 20px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 16px;box-shadow:var(--shadow);
+  position:sticky;top:8px;z-index:20}  /* 틀고정: 아래로 내려도 날짜·자동 실행·버튼이 항상 보이게 */
+.top::before{content:"";position:absolute;left:-17px;right:-17px;top:-9px;height:9px;background:var(--bg)}  /* 고정된 머리 위로 내용이 비쳐 보이지 않게 */
+.brand{display:grid}
+.brand small{color:var(--muted);font-size:12px}
+.brand b{font-size:18px;font-weight:700}
+.today{display:flex;align-items:baseline;gap:8px;padding-left:20px;border-left:1px solid var(--line)}
+.today .d{font-size:16px;font-weight:600}
+.today .w{color:var(--muted)}
+.tools{margin-left:auto;display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.auto{display:inline-flex;align-items:center;gap:7px;padding:6px 12px;border-radius:999px;background:var(--wait-bg);color:var(--wait);font-weight:600;font-size:13px;border:1px solid var(--line);cursor:pointer}
+.auto i{width:8px;height:8px;border-radius:50%;background:currentColor}
+.auto.on{background:var(--ok-bg);color:var(--ok);border-color:var(--ok)}
+.auto.on i{animation:blink 1.6s infinite}
+.auto.off-window{background:var(--hold-bg);color:var(--hold);border-color:var(--hold)}
+@keyframes blink{50%{opacity:.35}}
+.btn.danger{background:var(--fail);border-color:var(--fail);color:#fff}
+.busy{color:var(--run);font-weight:600;font-size:13px}
+.btn{border:1px solid var(--line);background:var(--panel-2);border-radius:8px;padding:6px 12px;cursor:pointer;font-weight:500}
+.btn:hover{border-color:var(--accent)}
+.btn:disabled{opacity:.5;cursor:default}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+
+.main{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(0,1fr);gap:14px;align-items:start}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px;box-shadow:var(--shadow);min-width:0}
+.ph{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 12px;margin-bottom:12px}
+.ph h2{margin:0;font-size:15px;font-weight:700}
+.sub{color:var(--muted)}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-left:auto}
+.chip{font-size:12px;font-weight:600;padding:2px 8px;border-radius:999px}
+.c-ok{background:var(--ok-bg);color:var(--ok)} .c-fail{background:var(--fail-bg);color:var(--fail)}
+.c-run{background:var(--run-bg);color:var(--run)} .c-wait{background:var(--wait-bg);color:var(--wait)}
+.c-hold{background:var(--hold-bg);color:var(--hold)} .c-miss{background:var(--fail-bg);color:var(--fail)}
+.c-none{background:var(--panel-2);color:var(--muted)} .c-gone{background:var(--gone-bg);color:var(--gone)}
+
+.jobs{display:grid;gap:8px}
+.empty{padding:24px;text-align:center;color:var(--muted);border:1px dashed var(--line);border-radius:8px}
+.job{all:unset;box-sizing:border-box;cursor:pointer;display:grid;grid-template-columns:58px 64px 66px minmax(90px,1fr) minmax(0,2.2fr) 80px;align-items:center;gap:12px;padding:10px 12px;border:1px solid var(--line);border-left:4px solid var(--wait);border-radius:8px;background:var(--panel)}
+.job:hover{background:var(--panel-2)}
+.job:focus-visible{outline:2px solid var(--accent)}
+.job.s-ok{border-left-color:var(--ok)} .job.s-fail,.job.s-miss{border-left-color:var(--fail)} .job.s-run{border-left-color:var(--run)}
+.job.s-hold{border-left-color:var(--hold)} .job.s-none{border-left-color:var(--line)}
+.jt b{display:block;font-family:var(--f-num);font-size:15px}
+.jt span{font-size:11px;color:var(--muted)}
+.jp{font-family:var(--f-num);font-size:24px;font-weight:700;letter-spacing:-.02em;line-height:1.1}
+.jp small{display:block;font-family:var(--f-body);font-size:10px;font-weight:500;color:var(--muted)}
+.ji b{display:block;font-weight:600} .ji span{font-size:12px;color:var(--muted)}
+.rot{display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;padding:3px 8px;border-radius:6px;color:#fff;white-space:nowrap}
+.r1{background:var(--r1)} .r2{background:var(--r2)} .r3{background:var(--r3)} .r4{background:var(--r4)} .r5{background:var(--r5)}
+.pill{justify-self:end;font-size:12px;font-weight:700;padding:3px 9px;border-radius:999px;white-space:nowrap}
+
+.pipe{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(3,minmax(0,1fr))}
+.pipe li{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);padding-right:8px;min-width:0}
+.pipe li span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pipe li::before{content:"";flex:none;width:18px;height:18px;border-radius:50%;display:grid;place-items:center;font-size:11px;font-weight:700;border:2px solid var(--line);background:var(--panel);color:#fff}
+.pipe li.ok{color:var(--ink)} .pipe li.ok::before{content:"✓";background:var(--ok);border-color:var(--ok)}
+.pipe li.fail{color:var(--fail);font-weight:600} .pipe li.fail::before{content:"✕";background:var(--fail);border-color:var(--fail)}
+.pipe li.run{color:var(--run);font-weight:600} .pipe li.run::before{border-color:var(--run);border-top-color:transparent;animation:spin 1s linear infinite}
+.pipe li.hold{color:var(--hold)} .pipe li.hold::before{content:"‖";background:var(--hold);border-color:var(--hold)}
+.pipe li.skip::before{content:"–";color:var(--muted)}
+
+.legend{display:flex;flex-wrap:wrap;gap:6px 12px;font-size:12px;color:var(--muted);margin-bottom:12px}
+.legend span{display:inline-flex;align-items:center;gap:5px}
+.sw{width:10px;height:10px;border-radius:3px;display:inline-block}
+.board{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:6px}
+.tile{all:unset;box-sizing:border-box;cursor:pointer;position:relative;display:grid;gap:3px;justify-items:center;padding:8px 2px 7px;border:1px solid var(--line);border-radius:8px;background:var(--panel);min-width:0}
+.tile:hover{border-color:var(--accent)}
+.tile:focus-visible{outline:2px solid var(--accent)}
+.tile b{font-family:var(--f-num);font-size:18px;font-weight:700;line-height:1}
+.tile .lb{font-size:10px;font-weight:600;line-height:1.1;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:0 3px}
+.tile .rt{font-size:10px;font-weight:700;color:#fff;border-radius:4px;padding:1px 5px;line-height:1.3}
+.tile .rt.none{background:transparent;color:transparent}
+.tile .dot{position:absolute;top:5px;right:5px;width:7px;height:7px;border-radius:50%;background:var(--line)}
+.tile.in{background:var(--ok-bg)} .tile.in .dot{background:var(--ok)} .tile.in .lb{color:var(--ok)}
+.tile.out{background:var(--hold-bg);border-color:var(--hold)} .tile.out .dot{background:var(--hold)} .tile.out .lb{color:var(--hold)}
+.tile.unknown{background:var(--fail-bg);border-color:var(--fail)} .tile.unknown .dot{background:var(--fail)} .tile.unknown .lb{color:var(--fail)}
+.tile.gone{background:var(--gone-bg)} .tile.gone .dot{background:var(--gone)} .tile.gone .lb{color:var(--gone)}
+.tile.none .lb{color:var(--muted)}
+.tile.assigned{box-shadow:inset 0 0 0 2px var(--accent)}
+.alerts{margin-top:12px;display:grid;gap:6px}
+.alert{display:flex;gap:8px;align-items:center;font-size:13px;padding:7px 10px;border-radius:8px}
+.alert b{font-family:var(--f-num)}
+
+.calhead{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin-bottom:10px}
+.calhead h2{margin:0;font-size:15px;min-width:110px;text-align:center}
+.cal{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px}
+.cal .hd{font-size:12px;font-weight:600;color:var(--muted);text-align:center}
+.cal .hd.sun{color:var(--fail)}
+.day{all:unset;box-sizing:border-box;cursor:pointer;min-height:70px;padding:6px 7px;border:1px solid var(--line);border-radius:8px;background:var(--panel);display:grid;align-content:start;gap:4px;min-width:0}
+.day:hover{border-color:var(--accent)}
+.day:focus-visible{outline:2px solid var(--accent)}
+.day.blank{visibility:hidden}
+.day.past{background:var(--panel-2)}
+.day.sel{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+.day .tr{display:flex;justify-content:space-between;align-items:baseline;gap:4px}
+.day .dn{font-family:var(--f-num);font-weight:700}
+.day.is-today .dn{background:var(--accent);color:#fff;padding:0 6px;border-radius:5px}
+.day .wk{font-size:10px;color:var(--muted);white-space:nowrap}
+.day .dots{display:flex;flex-wrap:wrap;gap:3px}
+.day .dots i{width:9px;height:9px;border-radius:2px;background:var(--wait-bg);border:1px solid var(--wait)}
+.day .dots i.ok{background:var(--ok);border-color:var(--ok)} .day .dots i.fail,.day .dots i.miss{background:var(--fail);border-color:var(--fail)}
+.day .dots i.run{background:var(--run);border-color:var(--run)} .day .dots i.hold{background:var(--hold);border-color:var(--hold)}
+.day .dots i.none{background:var(--line);border-color:var(--line)}
+.day .cnt{font-size:11px;color:var(--muted)}
+.day.skip6{cursor:default;background:repeating-linear-gradient(135deg,var(--panel-2) 0 6px,var(--panel) 6px 12px)}
+.calnote{margin:10px 0 0;font-size:12px;color:var(--muted)}
+
+.daydetail{margin-top:14px;border-top:1px solid var(--line);padding-top:14px;display:grid;gap:8px}
+.daydetail h3{margin:0 0 2px;font-size:14px;display:flex;flex-wrap:wrap;gap:6px 10px;align-items:baseline}
+.drow{all:unset;box-sizing:border-box;cursor:pointer;display:grid;grid-template-columns:52px 62px 62px 120px minmax(0,1fr) 210px 64px;gap:12px;align-items:center;padding:8px 12px;border:1px solid var(--line);border-left:4px solid var(--wait);border-radius:8px;background:var(--panel)}
+.drow:hover{background:var(--panel-2)}
+.drow:focus-visible{outline:2px solid var(--accent)}
+.drow.s-ok{border-left-color:var(--ok)} .drow.s-fail,.drow.s-miss{border-left-color:var(--fail)} .drow.s-run{border-left-color:var(--run)} .drow.s-none{border-left-color:var(--line)}
+.drow .h{font-family:var(--f-num);font-weight:700}
+.drow .no{font-family:var(--f-num);font-size:20px;font-weight:700;line-height:1}
+.drow .no small{font-family:var(--f-body);font-size:10px;font-weight:500;color:var(--muted);margin-left:2px}
+.drow .sg b{display:block} .drow .sg span{font-size:12px;color:var(--muted)}
+.drow .tx{font-size:13px;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.drow .up{font-size:12px;color:var(--muted);line-height:1.4;min-width:0}
+.drow .up a{color:var(--accent);font-family:var(--f-num);text-decoration:none}
+.drow .up a:hover{text-decoration:underline}
+.drow .up div{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.logbox{font-family:var(--f-num);font-size:12px;background:var(--panel-2);border:1px solid var(--line);border-radius:8px;padding:8px 10px;height:120px;overflow:auto;white-space:pre-wrap;margin:0}
+
+.scrim{position:fixed;inset:0;background:rgba(10,20,18,.35)}
+.drawer{position:fixed;top:0;right:0;bottom:0;width:min(480px,100%);background:var(--panel);border-left:1px solid var(--line);padding:20px 18px;overflow-y:auto;display:grid;align-content:start;gap:16px;box-shadow:-12px 0 30px -18px rgba(0,0,0,.4)}
+.dh{display:flex;align-items:center;gap:10px}
+.dh h3{margin:0;font-size:18px} .dh .x{margin-left:auto}
+.kv{display:grid;grid-template-columns:auto minmax(0,1fr);gap:6px 14px;font-size:13px;margin:0}
+.kv dt{color:var(--muted)} .kv dd{margin:0;min-width:0;overflow-wrap:anywhere}
+.steps{list-style:none;margin:0;padding:0}
+.steps li{display:grid;grid-template-columns:22px minmax(0,1fr);gap:10px;padding:8px 0;border-bottom:1px dashed var(--line)}
+.steps .ic{width:20px;height:20px;border-radius:50%;display:grid;place-items:center;font-size:11px;font-weight:700;color:#fff;background:var(--wait)}
+.steps .ok .ic{background:var(--ok)} .steps .fail .ic{background:var(--fail)} .steps .run .ic{background:var(--run)} .steps .hold .ic{background:var(--hold)} .steps .skip .ic{background:var(--line)}
+.steps small{display:block;color:var(--muted);font-size:12px}
+.sheet{width:100%;border-collapse:collapse;font-size:12px}
+.sheet th,.sheet td{border:1px solid var(--line);padding:5px 7px;text-align:left;vertical-align:top}
+.sheet th{background:var(--panel-2);font-weight:600;white-space:nowrap;width:120px}
+.sheet td{overflow-wrap:anywhere}
+.post{white-space:pre-wrap;background:var(--panel-2);border:1px solid var(--line);border-radius:8px;padding:10px 12px;font-size:13px;margin:0}
+.hist{display:grid;gap:6px}
+.hist .h{display:grid;grid-template-columns:72px 58px minmax(0,1fr) auto;gap:8px;align-items:center;font-size:13px;padding:6px 8px;border:1px solid var(--line);border-radius:6px}
+h4{margin:0 0 6px;font-size:13px;color:var(--muted);font-weight:600}
+.loading{position:fixed;inset:0;display:grid;place-items:center;background:var(--bg);font-size:15px;color:var(--muted)}
+@keyframes spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important}}
+</style>
+</head>
+<body>
+<div class="loading" id="loading">시트 읽는 중…</div>
+
+<div class="wrap">
+  <header class="top">
+    <div class="brand"><small>강남언니 · 폰보드 60–99</small><b>로테이션 대시보드</b></div>
+    <div class="today"><span class="d num" id="todayLabel"></span><span class="w" id="weekLabel"></span></div>
+    <div class="tools">
+      <span class="busy" id="busy"></span>
+      <button class="auto" id="autoBtn" type="button" title="눌러서 켜기/끄기"><i></i><span id="autoText">자동 실행 …</span></button>
+      <button class="btn" id="reloadBtn" type="button">시트 새로고침</button>
+      <button class="btn primary" id="checkBtn" type="button">로그인 점검 (전체)</button>
+    </div>
+  </header>
+
+  <div class="main">
+    <section class="panel">
+      <div class="ph"><h2>작업 목록</h2><span class="sub" id="jobsSub"></span><div class="chips" id="jobChips"></div></div>
+      <div class="jobs" id="jobs"></div>
+    </section>
+
+    <section class="panel">
+      <div class="ph"><h2>폰보드</h2><span class="sub" id="checked"></span></div>
+      <div class="legend">
+        <span><i class="sw" style="background:var(--ok)"></i>로그인됨</span>
+        <span><i class="sw" style="background:var(--hold)"></i>로그인 안 됨</span>
+        <span><i class="sw" style="background:var(--fail)"></i>판독 불가</span>
+        <span><i class="sw" style="background:var(--gone)"></i>연결 안 됨</span>
+        <span><i class="sw" style="box-shadow:inset 0 0 0 2px var(--accent)"></i>고른 날 작업 (색 = 로테이션)</span>
+      </div>
+      <div class="board" id="board"></div>
+      <div class="alerts" id="alerts"></div>
+    </section>
+  </div>
+
+  <section class="panel">
+    <div class="calhead">
+      <button class="btn" id="prevBtn" type="button" aria-label="이전 달">◀</button>
+      <h2 id="calTitle"></h2>
+      <button class="btn" id="nextBtn" type="button" aria-label="다음 달">▶</button>
+      <button class="btn" id="todayBtn" type="button">오늘</button>
+      <span class="sub">일요일 시작 · 날짜를 누르면 아래에 그날 글 목록이 나옵니다</span>
+      <div class="chips" id="monthChips"></div>
+    </div>
+    <div class="cal" id="cal"></div>
+    <p class="calnote" id="calNote"></p>
+    <div class="daydetail" id="dayDetail"></div>
+  </section>
+
+  <section class="panel">
+    <div class="ph"><h2>로그</h2></div>
+    <pre class="logbox" id="log"></pre>
+  </section>
+</div>
+
+<div class="scrim" id="scrim" hidden></div>
+<aside class="drawer" id="drawer" hidden></aside>
+
+<script>
+const DAYS = '일월화수목금토';
+const CLS = {'제외':'none','성공':'ok','완료':'ok','실패':'fail','보류':'hold','작업중':'run','예정':'wait','미실행':'miss','기록 없음':'none'};
+const PHONE = {in:'로그인됨', out:'로그인 안 됨', unknown:'판독 불가', gone:'연결 안 됨'};
+let M = null, PH = {}, view = null, sel = 1, today = null, busy = false;
+
+const $ = id => document.getElementById(id);
+const pad = n => String(n).padStart(2, '0');
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const isThisMonth = () => view && today && view.y === today.getFullYear() && view.m === today.getMonth() + 1;
+const dayData = d => M.days[d - 1];
+
+// 로그는 최근 LOG_MAX 줄만 남깁니다 (오래 켜 두면 쌓여서 화면이 느려짐).
+const LOG_MAX = 300;
+const logLines = [];
+window.onLog = line => {
+  const el = $('log'), t = new Date();
+  logLines.push(`${pad(t.getHours())}:${pad(t.getMinutes())}:${pad(t.getSeconds())}  ${line}`);
+  if (logLines.length > LOG_MAX) logLines.splice(0, logLines.length - LOG_MAX);
+  el.textContent = logLines.join('\n') + '\n';
+  el.scrollTop = el.scrollHeight;
+};
+
+function setBusy(text) {
+  busy = !!text;
+  $('busy').textContent = text || '';
+  ['reloadBtn', 'checkBtn'].forEach(id => $(id).disabled = busy);
+  document.querySelectorAll('[data-check]').forEach(b => b.disabled = busy);
+}
+
+async function loadMonth() {
+  M = await pywebview.api.month(view.y, view.m);
+  today = new Date(M.today + 'T00:00:00');
+}
+
+function renderTop() {
+  const d = today.getDate(), w = Math.floor((d - 1 + ((new Date(today.getFullYear(), today.getMonth(), 1).getDay()))) / 7) + 1;
+  $('todayLabel').textContent = `${today.getFullYear()}.${pad(today.getMonth() + 1)}.${pad(d)} (${DAYS[today.getDay()]})`;
+  $('weekLabel').textContent = w <= 5 ? `시트 기준 ${w}주차 ${DAYS[today.getDay()]}요일` : '6주차 — 오늘은 작업 없음';
+}
+
+function timeNote(j) {
+  if (j.uploaded) return '업로드됨';
+  if (j.busy) return j.busy + ' 중';
+  if (j.note) return j.note;
+  if (j.plan) return `${j.hour}시 안 무작위`;
+  return '시간대';
+}
+
+function counts(jobs) {
+  const c = {};
+  jobs.forEach(j => c[j.state] = (c[j.state] || 0) + 1);
+  return c;
+}
+const chipsHTML = c => Object.entries(c).map(([k, v]) => `<span class="chip c-${CLS[k] || 'wait'}">${k} ${v}</span>`).join('');
+
+function renderJobs() {
+  const dd = dayData(sel), el = $('jobs');
+  const label = `${view.m}월 ${sel}일 (${dd.dn})`;
+  if (dd.skip) {
+    $('jobsSub').textContent = `${label} · 6주차`;
+    $('jobChips').innerHTML = '';
+    el.innerHTML = '<div class="empty">6주차에 걸린 날이라 시트에 배정된 작업이 없습니다.</div>';
+    return;
+  }
+  const isToday = isThisMonth() && sel === today.getDate();
+  $('jobsSub').textContent = `${label} · ${dd.week}주차 ${dd.dn}요일 · ${dd.jobs.length}건${isToday ? ' · 오늘' : ''}`;
+  $('jobChips').innerHTML = chipsHTML(counts(dd.jobs));
+  if (!dd.jobs.length) { el.innerHTML = '<div class="empty">이 날은 작업이 없습니다.</div>'; return; }
+  el.innerHTML = dd.jobs.map((j, i) => `
+    <button type="button" class="job s-${CLS[j.state]}" data-i="${i}">
+      <div class="jt"><b>${j.plan && !j.uploaded ? j.plan : pad(j.hour) + '시'}</b><span>${timeNote(j)}</span></div>
+      <div class="jp">${j.board}<small>폰보드</small></div>
+      <span class="rot r${j.rot}">로테 ${j.rot}</span>
+      <div class="ji"><b>${esc(j.surgery)}</b><span>${esc(j.category)}</span></div>
+      <ol class="pipe">${j.steps.map(s => `<li class="${s.s}" title="${esc(s.n)}"><span>${s.k}</span></li>`).join('')}</ol>
+      <span class="pill c-${CLS[j.state]}">${j.state}</span>
+    </button>`).join('');
+  el.querySelectorAll('.job').forEach(b => b.onclick = () => openJob(dd.jobs[+b.dataset.i], dd));
+}
+
+function renderBoard() {
+  const dd = dayData(sel);
+  const assigned = new Map((dd.skip ? [] : dd.jobs).map(j => [j.board, j]));
+  const times = Object.values(PH).map(p => p.at).filter(Boolean).sort();
+  $('checked').textContent = times.length ? `마지막 점검 ${times[times.length - 1]}` : '아직 점검 안 함';
+  const el = $('board');
+  el.innerHTML = '';
+  for (let n = 60; n <= 99; n++) {
+    const p = PH[n] || {}, st = p.state || 'none', j = assigned.get(n);
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = `tile ${st}${j ? ' assigned' : ''}`;
+    b.title = `${n}번 · ${PHONE[st] || '미점검'}${p.nick ? ' · ' + p.nick : ''}`;
+    b.innerHTML = `<span class="dot"></span><b>${n}</b>
+      <span class="lb">${esc(st === 'in' && p.nick ? p.nick : (PHONE[st] || '미점검'))}</span>
+      <span class="rt ${j ? 'r' + j.rot : 'none'}">${j ? `로테${j.rot} ${j.hour}시` : '-'}</span>`;
+    b.onclick = () => openPhone(n);
+    el.appendChild(b);
+  }
+  const al = [];
+  for (let n = 60; n <= 99; n++) {
+    const p = PH[n]; if (!p) continue;
+    const j = assigned.get(n), when = j ? ` · 이날 ${j.hour}시 작업 있음` : '';
+    if (p.state === 'unknown') al.push(`<div class="alert c-fail"><b>${n}</b> 판독 불가 (인터넷 확인)${when}</div>`);
+    if (p.state === 'out') al.push(`<div class="alert c-hold"><b>${n}</b> 로그인 안 됨${when}</div>`);
+    if (p.state === 'gone') al.push(`<div class="alert c-gone"><b>${n}</b> 연결 안 됨 (USB/adb 확인)${when}</div>`);
+  }
+  $('alerts').innerHTML = al.join('');
+}
+
+function renderCal() {
+  $('calTitle').textContent = `${view.y}년 ${view.m}월`;
+  let h = DAYS.split('').map((x, i) => `<div class="hd${i === 0 ? ' sun' : ''}">${x}</div>`).join('');
+  for (let i = 0; i < M.offset; i++) h += '<div class="day blank" aria-hidden="true"></div>';
+  const skipped = [], mc = {};
+  const tday = isThisMonth() ? today.getDate() : (new Date(view.y, view.m - 1, 1) < today ? 99 : 0);
+  M.days.forEach(dd => {
+    const d = dd.day;
+    if (dd.skip) {
+      skipped.push(d);
+      h += `<div class="day skip6"><div class="tr"><span class="dn">${d}</span><span class="wk">6주차</span></div><span class="cnt">건너뜀</span></div>`;
+      return;
+    }
+    const c = counts(dd.jobs);
+    Object.entries(c).forEach(([k, v]) => mc[k] = (mc[k] || 0) + v);
+    const bad = (c['실패'] || 0) + (c['보류'] || 0) + (c['미실행'] || 0);
+    c['완료'] = (c['성공'] || 0) + (c['완료'] || 0);
+    const cls = ['day', d < tday ? 'past' : '', d === tday ? 'is-today' : '', d === sel ? 'sel' : ''].join(' ');
+    h += `<button type="button" class="${cls}" data-d="${d}">
+      <div class="tr"><span class="dn">${d}</span><span class="wk">${dd.week}주 ${dd.dn}</span></div>
+      <div class="dots">${dd.jobs.map(j => `<i class="${CLS[j.state]}"></i>`).join('')}</div>
+      <span class="cnt">${dd.jobs.length}건${c['완료'] ? ` · 완료 ${c['완료']}` : ''}${bad ? ` · <b style="color:var(--fail)">문제 ${bad}</b>` : ''}</span></button>`;
+  });
+  $('cal').innerHTML = h;
+  $('cal').querySelectorAll('button.day').forEach(b => b.onclick = () => {
+    sel = +b.dataset.d;
+    renderDay();
+    $('dayDetail').scrollIntoView({behavior: 'smooth', block: 'nearest'});
+  });
+  $('monthChips').innerHTML = chipsHTML(mc);
+  $('calNote').textContent = skipped.length ? `6주차에 걸린 ${skipped.join(', ')}일은 시트에 배정이 없어 건너뜁니다.`
+    : '이번 달은 6주차로 빠지는 날이 없습니다.';
+}
+
+// 달력 아래: 고른 날 어떤 글이 어느 폰·로테이션으로 올라갔는지(또는 올라갈지)
+function renderDayDetail() {
+  const dd = dayData(sel), el = $('dayDetail');
+  const head = `<h3>${view.m}월 ${sel}일 (${dd.dn})${dd.skip ? '' : ` <span class="sub">${dd.week}주차 ${dd.dn}요일 · ${dd.jobs.length}건</span>`}
+    <span class="chips" style="margin-left:auto">${dd.skip ? '' : chipsHTML(counts(dd.jobs))}</span></h3>`;
+  if (dd.skip) { el.innerHTML = head + '<div class="empty">6주차에 걸린 날이라 작업이 없습니다.</div>'; return; }
+  if (!dd.jobs.length) { el.innerHTML = head + '<div class="empty">이 날은 작업이 없습니다.</div>'; return; }
+  el.innerHTML = head + dd.jobs.map((j, i) => {
+    const first = (j.text || '').split('\n')[0];
+    const up = j.uploaded
+      ? `<div>${esc(j.uploaded)}</div><div><a href="${esc(j.url)}" target="_blank" rel="noopener" title="새 창에서 글 열기">${esc(j.url.replace('https://', ''))}</a></div><div title="${esc(j.account)}">${esc(j.account)}</div>`
+      : `<div>${j.busy ? esc(j.busy) + ' 중' : j.note ? esc(j.note) : j.state === '예정' ? (j.plan ? j.plan + ' 시작 예정' : '아직 안 올라감') : esc(j.status) || '기록 없음'}</div>`;
+    return `<button type="button" class="drow s-${CLS[j.state]}" data-i="${i}">
+      <span class="h" title="${timeNote(j)}">${j.plan && !j.uploaded ? j.plan : pad(j.hour) + '시'}</span>
+      <span class="no">${j.board}<small>번</small></span>
+      <span class="rot r${j.rot}">로테 ${j.rot}</span>
+      <span class="sg"><b>${esc(j.surgery)}</b><span>${esc(j.category)}</span></span>
+      <span class="tx" title="${esc(j.text)}">${esc(first)}</span>
+      <span class="up">${up}</span>
+      <span class="pill c-${CLS[j.state]}">${j.state}</span></button>`;
+  }).join('');
+  el.querySelectorAll('.drow').forEach(b => b.onclick = e => {
+    if (e.target.closest('a')) return;                  // 주소 누르면 글만 열고 상세는 안 띄움
+    openJob(dd.jobs[+b.dataset.i], dd);
+  });
+}
+
+function renderDay() { renderJobs(); renderBoard(); renderCal(); renderDayDetail(); }
+
+const ICON = {ok: '✓', fail: '✕', run: '…', hold: '‖', skip: '–', wait: ''};
+function openDrawer(html) {
+  const dr = $('drawer');
+  dr.innerHTML = html; dr.hidden = false; $('scrim').hidden = false;
+  dr.querySelector('.x').onclick = closeDrawer;
+  dr.querySelector('.x').focus();
+}
+function closeDrawer() { $('drawer').hidden = true; $('scrim').hidden = true; }
+$('scrim').onclick = closeDrawer;
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDrawer(); });
+
+function openJob(j, dd) {
+  openDrawer(`
+    <div class="dh"><span class="jp">${j.board}</span><span class="rot r${j.rot}">로테 ${j.rot}</span><h3>${esc(j.surgery)}</h3>
+      <button class="btn x" type="button">닫기</button></div>
+    <div><span class="pill c-${CLS[j.state]}">${j.state}</span></div>
+    <dl class="kv"><dt>날짜</dt><dd>${view.m}월 ${dd.day}일 (${dd.dn}) · ${dd.week}주차</dd>
+      <dt>실행 시간대</dt><dd>${j.hour}시 안에서 무작위${j.plan ? ` · <b class="num">${j.plan}</b> 시작 예정` : ''}${j.busy ? ` · <b>${esc(j.busy)} 중</b>` : ''}${j.note ? ` · ${esc(j.note)}` : ''}</dd>
+      <dt>게시판</dt><dd>${esc(j.category)}</dd><dt>시트 행</dt><dd class="num">${j.row}</dd></dl>
+    <div><h4>진행 단계</h4><ol class="steps">${j.steps.map(s => `<li class="${s.s}"><span class="ic">${ICON[s.s]}</span>
+      <div>${s.k}<small>${esc(s.n) || '대기'}</small></div></li>`).join('')}</ol></div>
+    <div><h4>시트 값</h4><table class="sheet">
+      <tr><th>작업 여부</th><td>${esc(j.status) || '—'}</td></tr><tr><th>게시글 URL</th><td class="num">${esc(j.url) || '—'}</td></tr>
+      <tr><th>최종 업로드</th><td class="num">${esc(j.uploaded) || '—'}</td></tr>
+      <tr><th>업로드 계정</th><td>${esc(j.account) || '—'}</td></tr></table></div>
+    <div><h4>게시글 (${j.text.length}자)</h4><pre class="post">${esc(j.text)}</pre></div>
+    <div class="actions" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <button class="btn primary" type="button" id="runNow" ${j.busy ? 'disabled' : ''}>지금 실행</button>
+      <span class="sub" id="runNote">${j.url ? '지난 글을 지우고 새 글을 올립니다' : '새 글을 올립니다'} · ${j.board}번 · 로테 ${j.rot}</span></div>`);
+  const b = $('runNow');
+  let armed = false;
+  b.onclick = async () => {
+    if (!armed) {                                  // 실제로 글이 올라가므로 한 번 더 확인
+      armed = true;
+      b.textContent = '정말 올리기';
+      b.classList.add('danger');
+      $('runNote').textContent = '한 번 더 누르면 바로 시작합니다';
+      return;
+    }
+    b.disabled = true;
+    const r = await pywebview.api.run_now(j.key);
+    $('runNote').textContent = r;
+    onAuto();
+  };
+}
+
+function openPhone(n) {
+  const p = PH[n] || {}, st = p.state || 'none';
+  const hist = [];
+  M.days.forEach(dd => dd.jobs.forEach(j => { if (j.board === n) hist.push({dd, j}); }));
+  openDrawer(`
+    <div class="dh"><span class="jp">${n}</span><h3>폰보드</h3><button class="btn x" type="button">닫기</button></div>
+    <div><span class="chip c-${{in: 'ok', out: 'hold', unknown: 'fail', gone: 'gone'}[st] || 'none'}">${PHONE[st] || '미점검'}</span>
+      ${p.nick ? `<span class="sub" style="margin-left:8px">${esc(p.nick)}</span>` : ''}</div>
+    <dl class="kv"><dt>마지막 점검</dt><dd class="num">${esc(p.at) || '없음'}</dd></dl>
+    <div><h4>${view.y}년 ${view.m}월 작업 ${hist.length}건</h4><div class="hist">${hist.map(({dd, j}) => `
+      <div class="h"><span class="num">${view.m}/${dd.day} ${dd.dn}</span><span class="rot r${j.rot}">로테 ${j.rot}</span>
+      <span>${esc(j.surgery)} <span class="sub">· ${j.hour}시</span></span><span class="chip c-${CLS[j.state]}">${j.state}</span></div>`).join('') || '<span class="sub">이번 달 작업 없음</span>'}</div></div>
+    <div><button class="btn primary" type="button" data-check="${n}" ${busy ? 'disabled' : ''}>이 폰만 로그인 점검</button></div>`);
+  $('drawer').querySelector('[data-check]').onclick = () => checkLogin([n]);
+}
+
+async function checkLogin(nos) {
+  if (busy) return;
+  setBusy(`로그인 점검 중… (${nos.length}대)`);
+  try {
+    await pywebview.api.check_login(nos);
+    PH = await pywebview.api.phones();
+    renderBoard();
+    if (!$('drawer').hidden && nos.length === 1) openPhone(nos[0]);
+  } finally { setBusy(''); }
+}
+
+async function goto(y, m) {
+  view = {y, m};
+  await loadMonth();
+  sel = isThisMonth() ? today.getDate() : 1;
+  renderDay();
+}
+
+$('prevBtn').onclick = () => goto(view.m === 1 ? view.y - 1 : view.y, view.m === 1 ? 12 : view.m - 1);
+$('nextBtn').onclick = () => goto(view.m === 12 ? view.y + 1 : view.y, view.m === 12 ? 1 : view.m + 1);
+$('todayBtn').onclick = () => goto(today.getFullYear(), today.getMonth() + 1);
+$('checkBtn').onclick = () => checkLogin([...Array(40)].map((_, i) => 60 + i));
+$('reloadBtn').onclick = async () => {
+  if (busy) return;
+  setBusy('시트 읽는 중…');
+  try {
+    await pywebview.api.reload(); lastSheetRead = Date.now();
+    await loadMonth(); renderTop(); renderDay();
+  } finally { setBusy(''); }
+};
+
+// 켜 둔 채로 날이 바뀌면 오늘·고른 날짜를 새 날로 옮기고, 5분마다 시트를 다시 읽어
+// 업로드 결과가 저절로 반영되게 합니다. (예전엔 켤 때 한 번만 날짜를 읽어 다음 날에도
+// 전날 요일이 그대로 보였음)
+const ymd = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+let lastSheetRead = Date.now();
+async function tick() {
+  if (busy || !today) return;
+  try { await refreshAuto(); } catch (e) { /* 다음 분에 다시 */ }
+  const now = new Date();
+  const dayChanged = ymd(now) !== ymd(today);
+  const sheetDue = Date.now() - lastSheetRead > 5 * 60 * 1000;
+  if (!dayChanged && !sheetDue) return;
+  try {
+    if (sheetDue) { await pywebview.api.reload(); lastSheetRead = Date.now(); }
+    if (dayChanged) {
+      const wasOnToday = isThisMonth() && sel === today.getDate();
+      if (wasOnToday || isThisMonth()) view = {y: now.getFullYear(), m: now.getMonth() + 1};
+      await loadMonth();
+      if (wasOnToday || isThisMonth()) sel = today.getDate();
+      onLog(`날짜가 바뀌어 ${ymd(today)} 기준으로 다시 그림`);
+    } else {
+      await loadMonth();
+    }
+    PH = await pywebview.api.phones();
+    renderTop(); renderDay();
+  } catch (e) { onLog('자동 새로고침 실패: ' + e); }
+}
+setInterval(tick, 60 * 1000);
+
+// 자동 실행 상태
+let AUTO = null;
+function renderAuto() {
+  if (!AUTO) return;
+  const b = $('autoBtn');
+  const range = AUTO.from || AUTO.until
+    ? ` · ${(AUTO.from || '').slice(5).replace('-', '/')}~${(AUTO.until || '').slice(5).replace('-', '/')}` : '';
+  b.classList.toggle('on', AUTO.enabled && AUTO.today_in_window);
+  b.classList.toggle('off-window', AUTO.enabled && !AUTO.today_in_window);
+  const busyN = Object.keys(AUTO.busy || {}).length;
+  $('autoText').textContent = (AUTO.enabled ? (AUTO.today_in_window ? '자동 실행 켜짐' : '자동 실행 켜짐 (오늘은 기간 밖)')
+    : '자동 실행 꺼짐') + range + (busyN ? ` · 진행 ${busyN}대` : '');
+}
+async function refreshAuto() { AUTO = await pywebview.api.auto_status(); renderAuto(); }
+$('autoBtn').onclick = async () => {
+  AUTO = await pywebview.api.set_auto(!(AUTO && AUTO.enabled));
+  renderAuto();
+};
+// 파이썬 스케줄러가 작업 시작/끝, 미리 로그인을 알릴 때
+let autoTimer = null;
+window.onAuto = () => {
+  clearTimeout(autoTimer);
+  autoTimer = setTimeout(async () => {
+    try {
+      await refreshAuto();
+      await pywebview.api.reload(true); lastSheetRead = Date.now();
+      await loadMonth();
+      PH = await pywebview.api.phones();
+      renderDay();
+    } catch (e) { onLog('화면 갱신 실패: ' + e); }
+  }, 800);
+};
+
+window.addEventListener('pywebviewready', async () => {
+  try {
+    const now = new Date();
+    PH = await pywebview.api.phones();
+    view = {y: now.getFullYear(), m: now.getMonth() + 1};
+    await loadMonth();
+    sel = today.getDate();
+    renderTop(); renderDay();
+    await refreshAuto();
+    $('loading').hidden = true;
+  } catch (e) {
+    $('loading').textContent = '시트를 읽지 못했습니다: ' + e;
+  }
+});
+</script>
+</body>
+</html>
