@@ -182,7 +182,9 @@ class Scheduler:
                 r = job.run_key(k, log=self.log)
                 if not manual:
                     self._mark(d, k, "성공" if r.get("ok") else f"실패: {r.get('error', '')}")
-                if not r.get("ok"):
+                if r.get("ok"):
+                    self._notify_success(j, d, r)
+                else:
                     notify.telegram_async(f"⚠️ 업로드 실패\n{where}\n이유: {r.get('error', '')}")
             except Exception as exc:                 # noqa: BLE001
                 self.log(f"!! {j.board}번 작업 중 오류: {type(exc).__name__}: {exc}")
@@ -196,6 +198,25 @@ class Scheduler:
                 self._rows_at = 0                    # 결과를 다시 읽게
                 self.on_change()
         threading.Thread(target=work, daemon=True, name=f"job-{j.board}").start()
+
+    def _notify_success(self, j: schedule.Job, d: date, r: dict):
+        """업로드 완료 알림: '오늘 N건 중 M번째' — 텔레그램 바로, 메일은 시트 거쳐."""
+        try:
+            rows = self._load_rows(force=True)
+            today = schedule.jobs_on(rows, d) or []
+            total = len(today)
+            nth = sum(1 for x in today if x.done_on(d))
+            row = next((x for x in today if job.key_of(x) == job.key_of(j)), j)
+        except Exception:                            # noqa: BLE001 — 숫자를 못 세도 알림은 보냄
+            total, nth, row = 0, 0, j
+        dn = schedule.day_of(d)
+        at = schedule.parse_uploaded(row.uploaded) or datetime.now()
+        title = f"✅ 업로드 완료 — 오늘 {total}건 중 {nth}번째" if total else "✅ 업로드 완료"
+        body = (f"{d:%m/%d}({dn}) {j.week}주차 {j.day} {j.hour}시 · {at:%H:%M} 업로드\n"
+                f"{j.board}번 · 로테 {j.rotation} · {j.surgery} [{j.category}]\n"
+                f"글: {r.get('url', '')}\n"
+                f"계정: {row.account or r.get('nick', '')}")
+        notify.both_async(title, body)
 
     # -- 미리 로그인 ------------------------------------------------------------------
 

@@ -39,3 +39,26 @@ def telegram(text: str) -> bool:
 def telegram_async(text: str):
     """작업 스레드를 붙잡지 않게 따로 보냅니다."""
     threading.Thread(target=telegram, args=(text,), daemon=True).start()
+
+
+MAIL_TAB = "알림"     # 시트 탭. Watch.gs 가 5분마다 읽어 메일로 보내고 'D 메일 보냄' 에 시각을 적음
+
+
+def queue_mail(title: str, body: str) -> bool:
+    """메일 보낼 내용을 시트 '알림' 탭에 한 줄 붙입니다 (보내는 건 시트 Apps Script).
+    이 PC 에 메일 계정·비밀번호를 두지 않으려고 이렇게 합니다."""
+    try:
+        from datetime import datetime
+        from core.sheet import Sheet
+        Sheet().append(MAIL_TAB, [[datetime.now().strftime("%Y-%m-%d %H:%M:%S"), title, body, ""]], text=True)
+        return True
+    except Exception:                                   # noqa: BLE001 — 탭이 아직 없으면 등
+        return False
+
+
+def both_async(title: str, body: str):
+    """텔레그램(바로) + 메일(시트 거쳐 5분 안)."""
+    def run():
+        telegram(f"{title}\n{body}")
+        queue_mail(title, body)
+    threading.Thread(target=run, daemon=True).start()

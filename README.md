@@ -3,7 +3,7 @@
 폰보드(60~99번 안드로이드 40대)로 강남언니(unni.app) 커뮤니티 글을 시트 일정대로 올리고,
 다음 차례에 지난 글을 지운 뒤 새로 올리는 자동화 + 데스크톱 대시보드.
 
-**현재 버전: v1.2** — 바뀐 내용은 [CHANGELOG.md](CHANGELOG.md). 버전 숫자는 `version.py` 한 곳에서 바꿉니다.
+**현재 버전: v1.3** — 바뀐 내용은 [CHANGELOG.md](CHANGELOG.md). 버전 숫자는 `version.py` 한 곳에서 바꿉니다.
 
 ## 구성
 
@@ -59,9 +59,10 @@
 
 | 언제 | 어디로 | 누가 보냄 |
 |---|---|---|
+| 업로드 완료 ("오늘 N건 중 M번째") | 텔레그램(바로) + 메일(5분 안) | 텔레그램은 프로그램, 메일은 프로그램이 '알림' 탭에 적고 Watch.gs 가 보냄 |
 | 자동 실행 작업 실패 | 텔레그램 | 프로그램 (`unni/notify.py`) |
 | 대시보드 실행됨 | 텔레그램 | 프로그램 |
-| 프로그램 멈춤 (M1 이 15분 넘게 그대로) / 복구 | 메일 + 텔레그램 | 시트 Apps Script (`appsscript/Watch.gs`) |
+| 프로그램 멈춤 (M1 이 15분 넘게 그대로) / 복구 | 메일 + 텔레그램 | 시트 Apps Script (`appsscript/Watch.gs`, 5분마다) |
 
 멈춤 알림 설정: 시트 → 확장 프로그램 → Apps Script → 새 파일 `Watch` 에 `appsscript/Watch.gs` 붙여넣기 →
 프로젝트 설정 → 스크립트 속성 `WATCH_TELEGRAM_TOKEN`, `WATCH_TELEGRAM_CHAT`, `WATCH_EMAIL` →
