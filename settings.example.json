@@ -8,6 +8,7 @@
     "auto_from": "2026-10-08",
     "auto_until": "",
     "skip_boards": [91],
+    "skip_accounts": ["2-94"],
     "telegram_token": "<텔레그램 봇 토큰 — 공개 저장소에 올리지 말 것>",
     "telegram_chat_id": 0,
     "alert_email": "<알림 받을 메일>"

@@ -23,6 +23,7 @@ from __future__ import annotations
 import time
 from datetime import datetime
 
+from core import chrome
 from core.board import Board
 from core.sheet import Sheet
 from . import login, post, schedule
@@ -81,7 +82,19 @@ def _run(match, label, delete_old, log) -> dict:
     if login.offline(board, devs):
         return fail("인터넷 연결 없음")
     put(status=schedule.RUNNING)
+    try:
+        return _steps(job, board, devs, dev, idx, put, fail, delete_old, log, t0)
+    finally:
+        # 작업이 끝나면(성공·실패 모두) 그 폰의 크롬 탭을 모두 닫습니다 — 탭이 계속 쌓여서
+        # (사용자 요청 2026-10-10). 로그인은 쿠키라 탭을 닫아도 풀리지 않습니다.
+        try:
+            chrome.close_all_tabs(board, devs)
+            log(f"  {job.board}번 크롬 탭 정리")
+        except Exception as exc:                     # noqa: BLE001 — 탭 정리 실패는 결과에 영향 없음
+            log(f"  {job.board}번 탭 정리 실패: {exc}")
 
+
+def _steps(job, board, devs, dev, idx, put, fail, delete_old, log, t0) -> dict:
     # 1. 이 행의 로테이션 계정으로 (미리 로그인돼 있으면 확인만)
     account = login.load_accounts(job.rotation).get(job.board)
     if not account:

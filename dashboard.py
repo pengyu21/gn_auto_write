@@ -180,7 +180,7 @@ class Api:
         if busy == "작업" and state in ("예정", "미실행"):
             state = "작업중"
         mark = (done or {}).get(key, "")
-        excluded = j.board in self._sched.skipped_boards() or "제외" in mark
+        excluded = self._sched.is_skipped(j) or "제외" in mark
         skipped = mark.startswith("건너뜀")
         if excluded and state in ("예정", "미실행"):
             state = "제외"
@@ -195,7 +195,7 @@ class Api:
                 "uploaded": shown if mine else "", "url": j.url, "account": j.account,
                 "text": j.text, "steps": steps_of(j, state),
                 "key": key, "plan": (plan or {}).get(key, ""), "busy": busy or "",
-                "note": "제외한 폰 (settings.json skip_boards)" if excluded
+                "note": "제외 (settings.json skip_boards / skip_accounts)" if excluded
                         else "시간이 지나 건너뜀" if skipped else ""}
 
     def _changed(self):

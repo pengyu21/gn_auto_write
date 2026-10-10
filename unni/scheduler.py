@@ -72,6 +72,13 @@ class Scheduler:
         """settings.json 'skip_boards' — 자동 실행에서 뺄 폰 (예: 인터넷 안 되는 91번)."""
         return {int(n) for n in load_settings().get("skip_boards", [])}
 
+    def skipped_accounts(self) -> set[str]:
+        """settings.json 'skip_accounts' — 뺄 계정 '로테-폰' (예: 비밀번호가 안 맞는 '2-94')."""
+        return {str(a).strip() for a in load_settings().get("skip_accounts", [])}
+
+    def is_skipped(self, j: schedule.Job) -> bool:
+        return j.board in self.skipped_boards() or f"{j.rotation}-{j.board}" in self.skipped_accounts()
+
     def in_window(self, d: date) -> bool:
         f, u = self.window()
         return (f is None or d >= f) and (u is None or d <= u)
@@ -137,15 +144,14 @@ class Scheduler:
         jobs = schedule.jobs_on(rows, today) or []
         at = self._make_plan(today, jobs)
         done = self.done_keys(today)
-        skip = self.skipped_boards()
 
         for j in jobs:
             k = job.key_of(j)
             if k in done or j.done_on(today):
                 continue
-            if j.board in skip:
-                self._mark(today, k, "건너뜀(제외한 폰)")
-                self.log(f"{j.board}번 {j.hour}시 작업 — 제외한 폰이라 건너뜀")
+            if self.is_skipped(j):
+                self._mark(today, k, "건너뜀(제외)")
+                self.log(f"{j.board}번 {j.hour}시 작업(로테 {j.rotation}) — 제외라 건너뜀")
                 continue
             start = datetime.combine(today, datetime.strptime(at[k], "%H:%M").time())
             if now.hour > j.hour:                    # 시간대가 지났으면 건너뜀 (재시도 없음)
@@ -203,10 +209,9 @@ class Scheduler:
             jobs = schedule.jobs_on(rows, d) or []
             at = self._make_plan(d, jobs)
             done = self.done_keys(d)
-            skip = self.skipped_boards()
             for j in jobs:
                 k = job.key_of(j)
-                if k in done or j.done_on(d) or j.board in skip:
+                if k in done or j.done_on(d) or self.is_skipped(j):
                     continue
                 start = datetime.combine(d, datetime.strptime(at[k], "%H:%M").time())
                 if start - now < PREP_LEAD:
