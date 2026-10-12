@@ -78,6 +78,29 @@ def offline(board, devs) -> list:
         if "NET_OK" not in r.stdout]
 
 
+def net_reason(board, dev) -> str:
+    """인터넷이 안 될 때 왜 안 되는지 한 줄로 (시트 '작업 여부' 에 적음).
+    2026-10 실제 사례: 79번 = VPN(tun0)은 붙었는데 통신이 안 됨, 91번 = Wi-Fi 는 붙었는데
+    기본 게이트웨이가 없어 바깥으로 못 나감."""
+    cmd = ("echo WIFI=$(cmd wifi status 2>/dev/null | grep -m1 -o 'connected to \"[^\"]*\"');"
+           "echo VPN=$(dumpsys connectivity | grep -c 'VPN CONNECTED');"
+           "echo ROUTE=$(ip route get 8.8.8.8 2>&1 | head -1);"
+           "echo AIR=$(settings get global airplane_mode_on)")
+    out = board.shell(cmd, [dev], timeout=30)[0].stdout
+    info = dict(line.split("=", 1) for line in out.splitlines() if "=" in line)
+    wifi = info.get("WIFI", "").replace("connected to ", "").strip('" ')
+    if info.get("AIR", "").strip() == "1":
+        return "비행기 모드 켜짐"
+    if info.get("VPN", "0").strip() not in ("", "0"):
+        return "VPN 연결됐지만 인터넷 안 됨 (VPN 앱 재연결 필요)"
+    if not wifi:
+        return "Wi-Fi 연결 안 됨"
+    route = info.get("ROUTE", "")
+    if "unreachable" in route or "via" not in route:
+        return f"Wi-Fi({wifi}) 연결됐지만 인터넷 경로 없음 (게이트웨이 없음 — Wi-Fi 다시 연결/IP 설정 확인)"
+    return f"Wi-Fi({wifi}) 연결됐지만 바깥 접속 안 됨 (공유기·DNS 확인)"
+
+
 def has_page(xml) -> bool:
     """웹 내용까지 구조에 잡혔는가. 아니면 '없다' 는 판정을 내리면 안 됩니다."""
     return screen.find(xml, rid=site.PAGE) is not None
@@ -377,8 +400,36 @@ def remember_nick(account_id: str, nick: str):
         NICKS.write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
 
 
+ATTEMPTS = ROOT / "login_attempts.json"      # 폰별 마지막 로그인 시도 결과 (대시보드 '왜 안 되는지')
+
+
+def last_attempts() -> dict[str, dict]:
+    try:
+        return json.loads(ATTEMPTS.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+
+
+def _record_attempt(no: int, account_id: str, result: str):
+    from datetime import datetime
+    data = last_attempts()
+    data[str(no)] = {"at": datetime.now().strftime("%Y-%m-%d %H:%M"), "account": mask(account_id),
+                     "result": result}
+    try:
+        ATTEMPTS.write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
+    except OSError:
+        pass
+
+
 def switch(board, dev, account: dict, log=print) -> str:
-    """dev 를 account({"id","pw"}) 로 로그인. 'ok' / 'skip: 이미 이 계정' / 'fail: …'."""
+    """dev 를 account({"id","pw"}) 로 로그인. 'ok' / 'skip: 이미 이 계정' / 'fail: …'.
+    결과는 login_attempts.json 에 남겨 대시보드가 '왜 로그인이 안 되는지' 보여 줍니다."""
+    result = _switch(board, dev, account, log)
+    _record_attempt(dev.no, account["id"], result)
+    return result
+
+
+def _switch(board, dev, account: dict, log=print) -> str:
     devs = [dev]
     board.key(224, devs)
     chrome.open_url(board, devs, site.MYPAGE)

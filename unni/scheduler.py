@@ -152,11 +152,13 @@ class Scheduler:
             if self.is_skipped(j):
                 self._mark(today, k, "건너뜀(제외)")
                 self.log(f"{j.board}번 {j.hour}시 작업(로테 {j.rotation}) — 제외라 건너뜀")
+                self._record_skip(j, k)
                 continue
             start = datetime.combine(today, datetime.strptime(at[k], "%H:%M").time())
             if now.hour > j.hour:                    # 시간대가 지났으면 건너뜀 (재시도 없음)
                 self._mark(today, k, "건너뜀(시간 지남)")
                 self.log(f"{j.board}번 {j.hour}시 작업 — 시간이 지나 건너뜀")
+                self._record_skip(j, k, "건너뜀: 시간 지남 (그 시간에 프로그램이 꺼져 있었거나 폰이 다른 작업 중)")
                 continue
             if now >= start and j.board not in self.busy:
                 self._start_job(j, today)
@@ -198,6 +200,32 @@ class Scheduler:
                 self._rows_at = 0                    # 결과를 다시 읽게
                 self.on_change()
         threading.Thread(target=work, daemon=True, name=f"job-{j.board}").start()
+
+    def _record_skip(self, j: schedule.Job, key: str, status: str = ""):
+        """건너뛴 이유를 시트 '작업 여부' 에 적습니다. 제외한 폰이면 지금 인터넷 상태도 같이."""
+        def work():
+            text = status
+            if not text:
+                if j.board in self.skipped_boards():
+                    text = "건너뜀: 제외한 폰 (settings.json skip_boards)"
+                    try:
+                        board = Board()
+                        devs = board.select([j.board])
+                        if not devs:
+                            text += " — 폰 연결 안 됨"
+                        elif login.offline(board, devs):
+                            text += f" — 인터넷 안 됨: {login.net_reason(board, devs[0])}"
+                        else:
+                            text += " — 지금은 인터넷 정상 (제외를 풀어도 됨)"
+                    except Exception:                # noqa: BLE001
+                        pass
+                else:
+                    text = f"건너뜀: 제외한 계정 (skip_accounts {j.rotation}-{j.board})"
+            try:
+                job.mark_key(key, text)
+            except Exception as exc:                 # noqa: BLE001
+                self.log(f"!! 건너뜀 기록 실패: {exc}")
+        threading.Thread(target=work, daemon=True).start()
 
     def _notify_success(self, j: schedule.Job, d: date, r: dict):
         """업로드 완료 알림: '오늘 N건 중 M번째' — 텔레그램 바로, 메일은 시트 거쳐."""

@@ -4,6 +4,7 @@ settings.json
 # 계정 아이디·닉네임, 폰 로그인 상태
 account_nicks.json
 login_state.json
+login_attempts.json
 # 폰 시리얼 -> 번호 표
 roster.csv
 # 실행 기록 / 키보드 백업 (PC 마다 다름)

@@ -36,6 +36,18 @@ def key_of(j: schedule.Job) -> str:
     return f"{j.week}-{j.day}-{j.hour}-{j.board}"
 
 
+def mark_key(key: str, status: str) -> bool:
+    """실행하지 않은 작업의 '작업 여부' 칸에 이유를 적습니다 (건너뜀 등)."""
+    sheet = Sheet()
+    values = sheet.read(schedule.TAB)
+    idx = schedule.columns(values[0])
+    j = next((x for x in schedule.load_rows(values=values) if key_of(x) == key), None)
+    if not j:
+        return False
+    sheet.write(schedule.TAB, f"{schedule.col_letter(idx['status'])}{j.row}", [[status]], text=False)
+    return True
+
+
 def run_key(key: str, delete_old: bool = True, log=print) -> dict:
     return _run(lambda j: key_of(j) == key, key, delete_old, log)
 
@@ -80,7 +92,11 @@ def _run(match, label, delete_old, log) -> dict:
         return fail("폰 연결 안 됨")
     dev = devs[0]
     if login.offline(board, devs):
-        return fail("인터넷 연결 없음")
+        try:
+            why = login.net_reason(board, dev)
+        except Exception:                            # noqa: BLE001
+            why = ""
+        return fail("인터넷 연결 없음" + (f" — {why}" if why else ""))
     put(status=schedule.RUNNING)
     try:
         return _steps(job, board, devs, dev, idx, put, fail, delete_old, log, t0)

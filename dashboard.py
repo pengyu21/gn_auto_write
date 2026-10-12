@@ -29,7 +29,8 @@ from datetime import date, datetime
 import webview
 
 from core.board import ROOT, load_settings
-from unni import job, schedule
+from core.board import Board
+from unni import job, login, schedule
 from unni.login import run_state
 from unni.scheduler import Scheduler
 from version import VERSION
@@ -50,6 +51,17 @@ def load_state() -> dict[int, dict]:
 def save_state(state: dict[int, dict]):
     STATE_FILE.write_text(json.dumps({str(k): v for k, v in sorted(state.items())},
                                      ensure_ascii=False, indent=1), encoding="utf-8")
+
+
+def _tag(why: str) -> str:
+    """긴 이유 -> 폰보드 칸에 들어갈 짧은 말."""
+    for key, short in (("비밀번호 불일치", "비번 불일치"), ("로그인 화면에 머묾", "로그인 막힘"),
+                       ("VPN", "VPN 문제"), ("경로 없음", "인터넷 없음"), ("Wi-Fi 연결 안 됨", "Wi-Fi 끊김"),
+                       ("비행기", "비행기 모드"), ("바깥 접속", "인터넷 안 됨"), ("USB", "USB 끊김"),
+                       ("못 읽음", "화면 못 읽음"), ("로그아웃 상태", "로그아웃")):
+        if key in why:
+            return short
+    return "확인 필요" if why else ""
 
 
 def steps_of(j: schedule.Job, state: str) -> list[dict]:
@@ -155,7 +167,11 @@ class Api:
                 else:
                     st, nick = "gone", ""
                 state[no] = {"state": st, "nick": nick, "at": at}
+            self._explain(state, [n for n in nos if state[n]["state"] != "in"])
             save_state(state)
+            bad = [n for n in nos if state[n]["state"] != "in"]
+            for n in bad:
+                self._log(f"  {n}번 {state[n].get('tag', '')}: {state[n].get('why', '')}")
             return {"ok": True}
         except Exception as exc:                       # noqa: BLE001 — 화면 로그로 보여 줌
             self._log(f"!! 로그인 점검 실패: {type(exc).__name__}: {exc}")
@@ -165,6 +181,41 @@ class Api:
             self._busy = False
 
     # -- 내부 -------------------------------------------------------------------
+
+    def _explain(self, state: dict, nos: list[int]):
+        """로그인 안 된 폰마다 '왜' 를 붙입니다: why(긴 설명) + tag(칸에 보일 짧은 말)."""
+        if not nos:
+            return
+        attempts = login.last_attempts()
+        try:
+            board = Board()
+            devs = {d.no: d for d in board.select(nos)}
+        except Exception:                              # noqa: BLE001
+            board, devs = None, {}
+        for no in nos:
+            st = state[no]["state"]
+            why = ""
+            if st == "gone" or no not in devs:
+                why = "USB/adb 연결 끊김 — 폰보드 연결·전원 확인"
+            else:
+                dev = devs[no]
+                try:
+                    off = bool(login.offline(board, [dev]))
+                    if off:
+                        why = "인터넷 안 됨 — " + login.net_reason(board, dev)
+                except Exception:                      # noqa: BLE001
+                    pass
+                if not why:
+                    last = attempts.get(str(no))
+                    if st == "unknown":
+                        why = "홈 화면을 못 읽음 — 크롬이 다른 창에 가려졌거나 멈춤 (화면 확인)"
+                    elif last and str(last.get("result", "")).startswith("fail"):
+                        why = (f"마지막 로그인 실패: {last['result'][5:].strip()} "
+                               f"({last.get('at', '')}, {last.get('account', '')})")
+                    else:
+                        why = "로그아웃 상태 — 다음 작업 때 그 차례 계정으로 자동 로그인"
+            state[no]["why"] = why
+            state[no]["tag"] = _tag(why)
 
     def _load(self) -> list[schedule.Job]:
         if self._rows is None:

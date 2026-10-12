@@ -215,7 +215,7 @@ h4{margin:0 0 6px;font-size:13px;color:var(--muted);font-weight:600}
       <h2 id="calTitle"></h2>
       <button class="btn" id="nextBtn" type="button" aria-label="다음 달">▶</button>
       <button class="btn" id="todayBtn" type="button">오늘</button>
-      <span class="sub">일요일 시작 · 날짜를 누르면 아래에 그날 글 목록이 나옵니다</span>
+      <span class="sub">일요일 시작 (시트와 같음) · 날짜를 누르면 아래에 그날 글 목록이 나옵니다</span>
       <div class="chips" id="monthChips"></div>
     </div>
     <div class="cal" id="cal"></div>
@@ -233,7 +233,8 @@ h4{margin:0 0 6px;font-size:13px;color:var(--muted);font-weight:600}
 <aside class="drawer" id="drawer" hidden></aside>
 
 <script>
-const DAYS = '일월화수목금토';
+const DAYS = '일월화수목금토';          // Date.getDay() 이름표 (일=0)
+const WEEK_ORDER = '일월화수목금토';    // 달력 칸 순서 — 시트와 같은 일요일 시작 (unni/schedule.py WEEK_START)
 const CLS = {'제외':'none','성공':'ok','완료':'ok','실패':'fail','보류':'hold','작업중':'run','예정':'wait','미실행':'miss','기록 없음':'none'};
 const PHONE = {in:'로그인됨', out:'로그인 안 됨', unknown:'판독 불가', gone:'연결 안 됨'};
 let M = null, PH = {}, view = null, sel = 1, today = null, busy = false;
@@ -268,9 +269,10 @@ async function loadMonth() {
 }
 
 function renderTop() {
-  const d = today.getDate(), w = Math.floor((d - 1 + ((new Date(today.getFullYear(), today.getMonth(), 1).getDay()))) / 7) + 1;
+  // 주차는 파이썬(unni/schedule.py, 월요일 시작)이 계산한 값을 그대로 씁니다.
+  const d = today.getDate(), dd = isThisMonth() ? dayData(d) : null;
   $('todayLabel').textContent = `${today.getFullYear()}.${pad(today.getMonth() + 1)}.${pad(d)} (${DAYS[today.getDay()]})`;
-  $('weekLabel').textContent = w <= 5 ? `시트 기준 ${w}주차 ${DAYS[today.getDay()]}요일` : '6주차 — 오늘은 작업 없음';
+  $('weekLabel').textContent = !dd ? '' : dd.skip ? '6주차 — 오늘은 작업 없음' : `시트 기준 ${dd.week}주차 ${dd.dn}요일`;
 }
 
 function timeNote(j) {
@@ -325,9 +327,10 @@ function renderBoard() {
     const b = document.createElement('button');
     b.type = 'button';
     b.className = `tile ${st}${j ? ' assigned' : ''}`;
-    b.title = `${n}번 · ${PHONE[st] || '미점검'}${p.nick ? ' · ' + p.nick : ''}`;
+    b.title = `${n}번 · ${PHONE[st] || '미점검'}${p.nick ? ' · ' + p.nick : ''}${p.why ? '\n' + p.why : ''}`;
+    // 로그인 안 된 칸은 '왜' 를 짧게 (비번 불일치 / VPN 문제 / 인터넷 경로 없음 / USB 끊김 …)
     b.innerHTML = `<span class="dot"></span><b>${n}</b>
-      <span class="lb">${esc(st === 'in' && p.nick ? p.nick : (PHONE[st] || '미점검'))}</span>
+      <span class="lb">${esc(st === 'in' && p.nick ? p.nick : (p.tag || PHONE[st] || '미점검'))}</span>
       <span class="rt ${j ? 'r' + j.rot : 'none'}">${j ? `로테${j.rot} ${j.hour}시` : '-'}</span>`;
     b.onclick = () => openPhone(n);
     el.appendChild(b);
@@ -335,17 +338,18 @@ function renderBoard() {
   const al = [];
   for (let n = 60; n <= 99; n++) {
     const p = PH[n]; if (!p) continue;
-    const j = assigned.get(n), when = j ? ` · 이날 ${j.hour}시 작업 있음` : '';
-    if (p.state === 'unknown') al.push(`<div class="alert c-fail"><b>${n}</b> 판독 불가 (인터넷 확인)${when}</div>`);
-    if (p.state === 'out') al.push(`<div class="alert c-hold"><b>${n}</b> 로그인 안 됨${when}</div>`);
-    if (p.state === 'gone') al.push(`<div class="alert c-gone"><b>${n}</b> 연결 안 됨 (USB/adb 확인)${when}</div>`);
+    const j = assigned.get(n), when = j ? ` · <b>이날 ${j.hour}시 작업 있음</b>` : '';
+    const why = p.why ? ` — ${esc(p.why)}` : '';
+    if (p.state === 'unknown') al.push(`<div class="alert c-fail"><b>${n}</b> ${esc(p.tag || '판독 불가')}${why}${when}</div>`);
+    if (p.state === 'out') al.push(`<div class="alert ${p.tag === '로그아웃' ? 'c-hold' : 'c-fail'}"><b>${n}</b> ${esc(p.tag || '로그인 안 됨')}${why}${when}</div>`);
+    if (p.state === 'gone') al.push(`<div class="alert c-gone"><b>${n}</b> ${esc(p.tag || '연결 안 됨')}${why}${when}</div>`);
   }
   $('alerts').innerHTML = al.join('');
 }
 
 function renderCal() {
   $('calTitle').textContent = `${view.y}년 ${view.m}월`;
-  let h = DAYS.split('').map((x, i) => `<div class="hd${i === 0 ? ' sun' : ''}">${x}</div>`).join('');
+  let h = WEEK_ORDER.split('').map(x => `<div class="hd${x === '일' ? ' sun' : ''}">${x}</div>`).join('');
   for (let i = 0; i < M.offset; i++) h += '<div class="day blank" aria-hidden="true"></div>';
   const skipped = [], mc = {};
   const tday = isThisMonth() ? today.getDate() : (new Date(view.y, view.m - 1, 1) < today ? 99 : 0);
@@ -460,7 +464,8 @@ function openPhone(n) {
     <div class="dh"><span class="jp">${n}</span><h3>폰보드</h3><button class="btn x" type="button">닫기</button></div>
     <div><span class="chip c-${{in: 'ok', out: 'hold', unknown: 'fail', gone: 'gone'}[st] || 'none'}">${PHONE[st] || '미점검'}</span>
       ${p.nick ? `<span class="sub" style="margin-left:8px">${esc(p.nick)}</span>` : ''}</div>
-    <dl class="kv"><dt>마지막 점검</dt><dd class="num">${esc(p.at) || '없음'}</dd></dl>
+    <dl class="kv"><dt>마지막 점검</dt><dd class="num">${esc(p.at) || '없음'}</dd>
+      ${p.why ? `<dt>안 되는 이유</dt><dd><b>${esc(p.tag || '')}</b> — ${esc(p.why)}</dd>` : ''}</dl>
     <div><h4>${view.y}년 ${view.m}월 작업 ${hist.length}건</h4><div class="hist">${hist.map(({dd, j}) => `
       <div class="h"><span class="num">${view.m}/${dd.day} ${dd.dn}</span><span class="rot r${j.rot}">로테 ${j.rot}</span>
       <span>${esc(j.surgery)} <span class="sub">· ${j.hour}시</span></span><span class="chip c-${CLS[j.state]}">${j.state}</span></div>`).join('') || '<span class="sub">이번 달 작업 없음</span>'}</div></div>
