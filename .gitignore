@@ -10,6 +10,7 @@ roster.csv
 # 실행 기록 / 키보드 백업 (PC 마다 다름)
 run_plan.json
 ime_backup.json
+dashboard.log
 # 시트 백업(게시글·계정 기록 포함)
 *백업*.json
 *.backup.json

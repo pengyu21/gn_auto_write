@@ -149,6 +149,10 @@ class Scheduler:
             k = job.key_of(j)
             if k in done or j.done_on(today):
                 continue
+            if j.status.startswith(schedule.RUNNING) and j.board not in self.busy:
+                # 이 프로그램 밖(수동 실행 등)에서 돌고 있는 행 — 같은 글이 두 번 올라가지 않게 건드리지 않음.
+                # (시트는 10분마다 다시 읽으므로, 그쪽이 끝나면 '성공'/'실패' 로 바뀌어 자연히 빠짐)
+                continue
             if self.is_skipped(j):
                 self._mark(today, k, "건너뜀(제외)")
                 self.log(f"{j.board}번 {j.hour}시 작업(로테 {j.rotation}) — 제외라 건너뜀")

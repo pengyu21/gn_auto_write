@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import calendar
 import json
+from collections import deque
 import re
 import sys
 import threading
@@ -37,6 +38,8 @@ from version import VERSION
 
 UI = ROOT / "ui" / "dashboard.html"
 STATE_FILE = ROOT / "login_state.json"
+LOG_FILE = ROOT / "dashboard.log"          # 전체 로그 (공개 저장소 제외). 화면에는 최근 300줄만
+LOG_BUFFER: deque = deque(maxlen=300)
 PHONES = list(range(60, 100))
 
 
@@ -257,14 +260,25 @@ class Api:
             except Exception:                          # noqa: BLE001
                 pass
 
+    def logs(self) -> list:
+        """최근 로그 [(시각, 줄)…] — 화면이 처음 뜰 때 불러감."""
+        return list(LOG_BUFFER)
+
     def _log(self, line: str):
         # print 는 쓰지 않습니다 — run_state 가 print 를 이 함수로 돌려보내서 무한 반복됩니다.
         if sys.__stdout__:
             sys.__stdout__.write(f"{line}\n")
             sys.__stdout__.flush()
+        at = datetime.now().strftime("%H:%M:%S")
+        LOG_BUFFER.append((at, str(line)))
+        try:
+            with open(LOG_FILE, "a", encoding="utf-8") as fh:      # 파일에도 남김 (화면과 별개로 보관)
+                fh.write(f"{datetime.now():%Y-%m-%d} {at}  {line}\n")
+        except OSError:
+            pass
         if self._window:
             try:
-                self._window.evaluate_js(f"window.onLog && onLog({json.dumps(str(line))})")
+                self._window.evaluate_js(f"window.onLog && onLog({json.dumps(str(line))}, {json.dumps(at)})")
             except Exception:                          # noqa: BLE001 — 창이 닫히는 중
                 pass
 

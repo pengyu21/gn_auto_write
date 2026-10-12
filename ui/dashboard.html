@@ -139,6 +139,11 @@ button{font:inherit;color:inherit}
 .drow:hover{background:var(--panel-2)}
 .drow:focus-visible{outline:2px solid var(--accent)}
 .drow.s-ok{border-left-color:var(--ok)} .drow.s-fail,.drow.s-miss{border-left-color:var(--fail)} .drow.s-run{border-left-color:var(--run)} .drow.s-none{border-left-color:var(--line)}
+/* 올라간 글은 줄 전체를 초록으로 (오른쪽 작은 표시만으로는 구분이 안 된다는 요청) */
+.drow.s-ok,.job.s-ok{background:var(--ok-bg);border-color:var(--ok)}
+.drow.s-ok:hover,.job.s-ok:hover{background:#D3EEDD}
+.drow.s-fail,.job.s-fail{background:var(--fail-bg)}
+.drow.s-run,.job.s-run{background:var(--run-bg)}
 .drow .h{font-family:var(--f-num);font-weight:700}
 .drow .no{font-family:var(--f-num);font-size:20px;font-weight:700;line-height:1}
 .drow .no small{font-family:var(--f-body);font-size:10px;font-weight:500;color:var(--muted);margin-left:2px}
@@ -148,7 +153,39 @@ button{font:inherit;color:inherit}
 .drow .up a{color:var(--accent);font-family:var(--f-num);text-decoration:none}
 .drow .up a:hover{text-decoration:underline}
 .drow .up div{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.logbox{font-family:var(--f-num);font-size:12px;background:var(--panel-2);border:1px solid var(--line);border-radius:8px;padding:8px 10px;height:120px;overflow:auto;white-space:pre-wrap;margin:0}
+/* 두 단: 왼쪽 작업 목록·달력, 오른쪽 폰보드·로그 (오른쪽은 아래로 내려도 따라옴) */
+.col{display:grid;gap:14px;align-content:start;min-width:0}
+.side{position:sticky;top:92px;max-height:calc(100vh - 104px);display:flex;flex-direction:column;gap:14px}
+.boardpanel{flex:none;overflow:auto;max-height:60vh}
+.boardpanel .alerts{max-height:150px;overflow:auto}
+.logpanel{flex:1 1 auto;min-height:260px;display:flex;flex-direction:column}
+.logbox{flex:1;min-height:0;overflow:auto;font-family:var(--f-num);font-size:12px;line-height:1.55;background:var(--panel-2);border:1px solid var(--line);border-radius:8px;padding:6px 10px}
+.logbox .ln{display:grid;grid-template-columns:62px minmax(0,1fr);gap:8px;padding:2px 0;border-bottom:1px dashed var(--line);overflow-wrap:anywhere}
+.logbox .ln time{color:var(--muted)}
+.logbox .ln.err{color:var(--fail);font-weight:600} .logbox .ln.ok{color:var(--ok);font-weight:600} .logbox .ln.info{color:var(--run)}
+.logbox .empty-log{color:var(--muted);padding:8px 0}
+.btn.tiny{padding:2px 9px;font-size:12px}
+.btn.tiny[aria-pressed="true"]{background:var(--fail-bg);border-color:var(--fail);color:var(--fail)}
+#jobsPanel{scroll-margin-top:96px}
+@media (max-width:1000px){.side{position:static;max-height:none}.logpanel{height:360px}}
+
+/* 작업 목록 한 줄 (예전 '작업 목록' + '달력 아래 목록' 을 하나로) */
+.row{all:unset;box-sizing:border-box;cursor:pointer;display:grid;grid-template-columns:62px 52px 62px 96px minmax(0,1fr) 205px 58px;gap:10px;align-items:center;padding:9px 12px;border:1px solid var(--line);border-left:4px solid var(--wait);border-radius:8px;background:var(--panel)}
+.row:hover{background:var(--panel-2)}
+.row:focus-visible{outline:2px solid var(--accent)}
+.row.s-ok{border-color:var(--ok);border-left-color:var(--ok);background:var(--ok-bg)} .row.s-ok:hover{background:#D3EEDD}
+.row.s-fail{border-left-color:var(--fail);background:var(--fail-bg)} .row.s-miss{border-left-color:var(--fail)}
+.row.s-run{border-left-color:var(--run);background:var(--run-bg)} .row.s-hold{border-left-color:var(--hold)} .row.s-none{border-left-color:var(--line)}
+.row .t b{display:block;font-family:var(--f-num);font-size:15px} .row .t small{display:block;font-size:10.5px;color:var(--muted);line-height:1.25}
+.row .no{font-family:var(--f-num);font-size:22px;font-weight:700;line-height:1} .row .no small{font-family:var(--f-body);font-size:10px;font-weight:500;color:var(--muted);margin-left:1px}
+.row .sg b{display:block;font-weight:600} .row .sg small{font-size:12px;color:var(--muted)}
+.row .mid{min-width:0;display:grid;gap:5px}
+.row .tx{font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.row .up{font-size:12px;color:var(--muted);line-height:1.4;min-width:0}
+.row .up div,.row .up a{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.row .up a{color:var(--accent);font-family:var(--f-num);text-decoration:none} .row .up a:hover{text-decoration:underline}
+.pipe.mini li{font-size:11px} .pipe.mini li::before{width:15px;height:15px;font-size:9px}
+@media (max-width:1300px){.row{grid-template-columns:58px 48px 58px 90px minmax(0,1fr) 58px}.row .up{display:none}}
 
 .scrim{position:fixed;inset:0;background:rgba(10,20,18,.35)}
 .drawer{position:fixed;top:0;right:0;bottom:0;width:min(480px,100%);background:var(--panel);border-left:1px solid var(--line);padding:20px 18px;overflow-y:auto;display:grid;align-content:start;gap:16px;box-shadow:-12px 0 30px -18px rgba(0,0,0,.4)}
@@ -189,44 +226,51 @@ h4{margin:0 0 6px;font-size:13px;color:var(--muted);font-weight:600}
     </div>
   </header>
 
+  <!-- 왼쪽: 작업 목록(하나로 통합) → 달력  |  오른쪽(따라 내려옴): 폰보드 → 로그 -->
   <div class="main">
-    <section class="panel">
-      <div class="ph"><h2>작업 목록</h2><span class="sub" id="jobsSub"></span><div class="chips" id="jobChips"></div></div>
-      <div class="jobs" id="jobs"></div>
-    </section>
+    <div class="col">
+      <section class="panel" id="jobsPanel">
+        <div class="ph"><h2>작업 목록</h2><span class="sub" id="jobsSub"></span><div class="chips" id="jobChips"></div></div>
+        <div class="jobs" id="jobs"></div>
+      </section>
 
-    <section class="panel">
-      <div class="ph"><h2>폰보드</h2><span class="sub" id="checked"></span></div>
-      <div class="legend">
-        <span><i class="sw" style="background:var(--ok)"></i>로그인됨</span>
-        <span><i class="sw" style="background:var(--hold)"></i>로그인 안 됨</span>
-        <span><i class="sw" style="background:var(--fail)"></i>판독 불가</span>
-        <span><i class="sw" style="background:var(--gone)"></i>연결 안 됨</span>
-        <span><i class="sw" style="box-shadow:inset 0 0 0 2px var(--accent)"></i>고른 날 작업 (색 = 로테이션)</span>
-      </div>
-      <div class="board" id="board"></div>
-      <div class="alerts" id="alerts"></div>
-    </section>
-  </div>
-
-  <section class="panel">
-    <div class="calhead">
-      <button class="btn" id="prevBtn" type="button" aria-label="이전 달">◀</button>
-      <h2 id="calTitle"></h2>
-      <button class="btn" id="nextBtn" type="button" aria-label="다음 달">▶</button>
-      <button class="btn" id="todayBtn" type="button">오늘</button>
-      <span class="sub">일요일 시작 (시트와 같음) · 날짜를 누르면 아래에 그날 글 목록이 나옵니다</span>
-      <div class="chips" id="monthChips"></div>
+      <section class="panel">
+        <div class="calhead">
+          <button class="btn" id="prevBtn" type="button" aria-label="이전 달">◀</button>
+          <h2 id="calTitle"></h2>
+          <button class="btn" id="nextBtn" type="button" aria-label="다음 달">▶</button>
+          <button class="btn" id="todayBtn" type="button">오늘</button>
+          <span class="sub">일요일 시작 (시트와 같음) · 날짜를 누르면 위 작업 목록이 그날로 바뀝니다</span>
+          <div class="chips" id="monthChips"></div>
+        </div>
+        <div class="cal" id="cal"></div>
+        <p class="calnote" id="calNote"></p>
+      </section>
     </div>
-    <div class="cal" id="cal"></div>
-    <p class="calnote" id="calNote"></p>
-    <div class="daydetail" id="dayDetail"></div>
-  </section>
 
-  <section class="panel">
-    <div class="ph"><h2>로그</h2></div>
-    <pre class="logbox" id="log"></pre>
-  </section>
+    <div class="col side">
+      <section class="panel boardpanel">
+        <div class="ph"><h2>폰보드</h2><span class="sub" id="checked"></span></div>
+        <div class="legend">
+          <span><i class="sw" style="background:var(--ok)"></i>로그인됨</span>
+          <span><i class="sw" style="background:var(--hold)"></i>로그인 안 됨</span>
+          <span><i class="sw" style="background:var(--fail)"></i>판독 불가</span>
+          <span><i class="sw" style="background:var(--gone)"></i>연결 안 됨</span>
+          <span><i class="sw" style="box-shadow:inset 0 0 0 2px var(--accent)"></i>고른 날 작업 (색 = 로테이션)</span>
+        </div>
+        <div class="board" id="board"></div>
+        <div class="alerts" id="alerts"></div>
+      </section>
+
+      <section class="panel logpanel">
+        <div class="ph"><h2>로그</h2><span class="sub" id="logCount"></span>
+          <div class="chips">
+            <button class="btn tiny" id="logOnlyBad" type="button" aria-pressed="false">문제만</button>
+          </div></div>
+        <div class="logbox" id="log" aria-live="polite"></div>
+      </section>
+    </div>
+  </div>
 </div>
 
 <div class="scrim" id="scrim" hidden></div>
@@ -245,16 +289,35 @@ const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;
 const isThisMonth = () => view && today && view.y === today.getFullYear() && view.m === today.getMonth() + 1;
 const dayData = d => M.days[d - 1];
 
-// 로그는 최근 LOG_MAX 줄만 남깁니다 (오래 켜 두면 쌓여서 화면이 느려짐).
+// 로그: 최근 LOG_MAX 줄만 남기고(오래 켜 두면 느려짐), 문제는 빨강·완료는 초록·미리 로그인은 파랑.
 const LOG_MAX = 300;
 const logLines = [];
-window.onLog = line => {
-  const el = $('log'), t = new Date();
-  logLines.push(`${pad(t.getHours())}:${pad(t.getMinutes())}:${pad(t.getSeconds())}  ${line}`);
+let logOnlyBad = false;
+const logKind = s => /!!|실패|오류|못 |안 됨|없음 —|불일치/.test(s) ? 'err'
+  : /완료|등록됨|성공|로그인됨|삭제됨/.test(s) ? 'ok'
+  : /미리 로그인|시작 시각|자동 실행/.test(s) ? 'info' : '';
+function renderLog() {
+  const el = $('log');
+  const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 40;   // 위로 올려 읽는 중이면 안 끌어내림
+  const shown = logOnlyBad ? logLines.filter(x => x.kind === 'err') : logLines;
+  el.innerHTML = shown.length ? shown.map(x => `<div class="ln ${x.kind}"><time>${x.t}</time><span>${esc(x.line)}</span></div>`).join('')
+    : `<div class="empty-log">${logOnlyBad ? '문제 기록이 없습니다.' : '아직 기록이 없습니다.'}</div>`;
+  const bad = logLines.filter(x => x.kind === 'err').length;
+  $('logCount').textContent = `${logLines.length}줄${bad ? ` · 문제 ${bad}` : ''}`;
+  if (atBottom) el.scrollTop = el.scrollHeight;
+}
+// at: 파이썬이 붙인 'HH:MM:SS' (다시 켰을 때 지난 로그를 불러올 때도 같은 시각으로 보이게)
+window.onLog = (line, at) => {
+  const t = new Date();
+  const text = String(line).replace(/^\s+/, '');
+  if (!text) return;
+  logLines.push({t: at || `${pad(t.getHours())}:${pad(t.getMinutes())}:${pad(t.getSeconds())}`, line: text, kind: logKind(text)});
   if (logLines.length > LOG_MAX) logLines.splice(0, logLines.length - LOG_MAX);
-  el.textContent = logLines.join('\n') + '\n';
-  el.scrollTop = el.scrollHeight;
+  renderLog();
 };
+// 로그는 지우는 버튼을 두지 않습니다 (실수로 눌러 기록이 사라진 적 있음). '문제만' 은 보기만 바꿈.
+$('logOnlyBad').onclick = e => { logOnlyBad = !logOnlyBad; e.currentTarget.setAttribute('aria-pressed', logOnlyBad); renderLog(); };
+renderLog();
 
 function setBusy(text) {
   busy = !!text;
@@ -303,16 +366,29 @@ function renderJobs() {
   $('jobsSub').textContent = `${label} · ${dd.week}주차 ${dd.dn}요일 · ${dd.jobs.length}건${isToday ? ' · 오늘' : ''}`;
   $('jobChips').innerHTML = chipsHTML(counts(dd.jobs));
   if (!dd.jobs.length) { el.innerHTML = '<div class="empty">이 날은 작업이 없습니다.</div>'; return; }
-  el.innerHTML = dd.jobs.map((j, i) => `
-    <button type="button" class="job s-${CLS[j.state]}" data-i="${i}">
-      <div class="jt"><b>${j.plan && !j.uploaded ? j.plan : pad(j.hour) + '시'}</b><span>${timeNote(j)}</span></div>
-      <div class="jp">${j.board}<small>폰보드</small></div>
+  // 한 줄 = 시각 | 폰 | 로테 | 수술부위·게시판 | 글 첫 줄 + 3단계 | 업로드 결과(시각·주소·계정) | 상태
+  el.innerHTML = dd.jobs.map((j, i) => {
+    const first = (j.text || '').split('\n')[0];
+    const result = j.uploaded
+      ? `<div>${esc(j.uploaded)}</div><a href="${esc(j.url)}" target="_blank" rel="noopener" title="새 창에서 글 열기">${esc(j.url.replace('https://', ''))}</a><div title="${esc(j.account)}">${esc(j.account)}</div>`
+      : `<div title="${esc(j.status)}">${j.busy ? esc(j.busy) + ' 중' : j.note ? esc(j.note)
+          : j.state === '예정' ? (j.plan ? j.plan + ' 시작 예정' : '아직 안 올라감') : esc(j.status) || '기록 없음'}</div>`;
+    return `
+    <button type="button" class="row s-${CLS[j.state]}" data-i="${i}">
+      <span class="t"><b>${j.plan && !j.uploaded ? j.plan : pad(j.hour) + '시'}</b><small>${esc(timeNote(j))}</small></span>
+      <span class="no">${j.board}<small>번</small></span>
       <span class="rot r${j.rot}">로테 ${j.rot}</span>
-      <div class="ji"><b>${esc(j.surgery)}</b><span>${esc(j.category)}</span></div>
-      <ol class="pipe">${j.steps.map(s => `<li class="${s.s}" title="${esc(s.n)}"><span>${s.k}</span></li>`).join('')}</ol>
+      <span class="sg"><b>${esc(j.surgery)}</b><small>${esc(j.category)}</small></span>
+      <span class="mid"><span class="tx" title="${esc(j.text)}">${esc(first)}</span>
+        <ol class="pipe mini">${j.steps.map(s => `<li class="${s.s}" title="${esc(s.n)}"><span>${s.k}</span></li>`).join('')}</ol></span>
+      <span class="up">${result}</span>
       <span class="pill c-${CLS[j.state]}">${j.state}</span>
-    </button>`).join('');
-  el.querySelectorAll('.job').forEach(b => b.onclick = () => openJob(dd.jobs[+b.dataset.i], dd));
+    </button>`;
+  }).join('');
+  el.querySelectorAll('.row').forEach(b => b.onclick = e => {
+    if (e.target.closest('a')) return;              // 주소를 누르면 글만 열고 상세는 안 띄움
+    openJob(dd.jobs[+b.dataset.i], dd);
+  });
 }
 
 function renderBoard() {
@@ -374,41 +450,14 @@ function renderCal() {
   $('cal').querySelectorAll('button.day').forEach(b => b.onclick = () => {
     sel = +b.dataset.d;
     renderDay();
-    $('dayDetail').scrollIntoView({behavior: 'smooth', block: 'nearest'});
+    $('jobsPanel').scrollIntoView({behavior: 'smooth', block: 'start'});   // 위 작업 목록으로
   });
   $('monthChips').innerHTML = chipsHTML(mc);
   $('calNote').textContent = skipped.length ? `6주차에 걸린 ${skipped.join(', ')}일은 시트에 배정이 없어 건너뜁니다.`
     : '이번 달은 6주차로 빠지는 날이 없습니다.';
 }
 
-// 달력 아래: 고른 날 어떤 글이 어느 폰·로테이션으로 올라갔는지(또는 올라갈지)
-function renderDayDetail() {
-  const dd = dayData(sel), el = $('dayDetail');
-  const head = `<h3>${view.m}월 ${sel}일 (${dd.dn})${dd.skip ? '' : ` <span class="sub">${dd.week}주차 ${dd.dn}요일 · ${dd.jobs.length}건</span>`}
-    <span class="chips" style="margin-left:auto">${dd.skip ? '' : chipsHTML(counts(dd.jobs))}</span></h3>`;
-  if (dd.skip) { el.innerHTML = head + '<div class="empty">6주차에 걸린 날이라 작업이 없습니다.</div>'; return; }
-  if (!dd.jobs.length) { el.innerHTML = head + '<div class="empty">이 날은 작업이 없습니다.</div>'; return; }
-  el.innerHTML = head + dd.jobs.map((j, i) => {
-    const first = (j.text || '').split('\n')[0];
-    const up = j.uploaded
-      ? `<div>${esc(j.uploaded)}</div><div><a href="${esc(j.url)}" target="_blank" rel="noopener" title="새 창에서 글 열기">${esc(j.url.replace('https://', ''))}</a></div><div title="${esc(j.account)}">${esc(j.account)}</div>`
-      : `<div>${j.busy ? esc(j.busy) + ' 중' : j.note ? esc(j.note) : j.state === '예정' ? (j.plan ? j.plan + ' 시작 예정' : '아직 안 올라감') : esc(j.status) || '기록 없음'}</div>`;
-    return `<button type="button" class="drow s-${CLS[j.state]}" data-i="${i}">
-      <span class="h" title="${timeNote(j)}">${j.plan && !j.uploaded ? j.plan : pad(j.hour) + '시'}</span>
-      <span class="no">${j.board}<small>번</small></span>
-      <span class="rot r${j.rot}">로테 ${j.rot}</span>
-      <span class="sg"><b>${esc(j.surgery)}</b><span>${esc(j.category)}</span></span>
-      <span class="tx" title="${esc(j.text)}">${esc(first)}</span>
-      <span class="up">${up}</span>
-      <span class="pill c-${CLS[j.state]}">${j.state}</span></button>`;
-  }).join('');
-  el.querySelectorAll('.drow').forEach(b => b.onclick = e => {
-    if (e.target.closest('a')) return;                  // 주소 누르면 글만 열고 상세는 안 띄움
-    openJob(dd.jobs[+b.dataset.i], dd);
-  });
-}
-
-function renderDay() { renderJobs(); renderBoard(); renderCal(); renderDayDetail(); }
+function renderDay() { renderJobs(); renderBoard(); renderCal(); }
 
 const ICON = {ok: '✓', fail: '✕', run: '…', hold: '‖', skip: '–', wait: ''};
 function openDrawer(html) {
@@ -570,6 +619,8 @@ window.addEventListener('pywebviewready', async () => {
   try {
     const now = new Date();
     $('ver').textContent = 'v' + await pywebview.api.version();
+    // 다시 켰을 때 파이썬이 들고 있던 최근 로그부터 보여 줌
+    for (const [at, line] of await pywebview.api.logs()) onLog(line, at);
     PH = await pywebview.api.phones();
     view = {y: now.getFullYear(), m: now.getMonth() + 1};
     await loadMonth();
