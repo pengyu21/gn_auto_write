@@ -49,6 +49,7 @@ class Scheduler:
         self._beat_at = 0.0
         self._plan = self._load()
         self._thread: Optional[threading.Thread] = None
+        self.other = None                        # 바비톡 스케줄러 — 같은 폰을 쓰는 중이면 기다림
 
     # -- 상태 ----------------------------------------------------------------------
 
@@ -78,6 +79,10 @@ class Scheduler:
 
     def is_skipped(self, j: schedule.Job) -> bool:
         return j.board in self.skipped_boards() or f"{j.rotation}-{j.board}" in self.skipped_accounts()
+
+    def occupied(self, no: int) -> bool:
+        """이 폰을 지금 누가(강남언니·바비톡) 쓰고 있나."""
+        return no in self.busy or bool(self.other and no in self.other.busy)
 
     def in_window(self, d: date) -> bool:
         f, u = self.window()
@@ -118,7 +123,7 @@ class Scheduler:
         j = next((x for x in rows if job.key_of(x) == key), None)
         if not j:
             return "작업을 못 찾음"
-        if j.board in self.busy:
+        if self.occupied(j.board):
             return f"{j.board}번이 이미 '{self.busy[j.board]}' 중"
         self._start_job(j, date.today(), manual=True)
         return "시작함"
@@ -164,7 +169,7 @@ class Scheduler:
                 self.log(f"{j.board}번 {j.hour}시 작업 — 시간이 지나 건너뜀")
                 self._record_skip(j, k, "건너뜀: 시간 지남 (그 시간에 프로그램이 꺼져 있었거나 폰이 다른 작업 중)")
                 continue
-            if now >= start and j.board not in self.busy:
+            if now >= start and not self.occupied(j.board):
                 self._start_job(j, today)
 
         self._prepare(now, rows)
@@ -174,7 +179,7 @@ class Scheduler:
     def _start_job(self, j: schedule.Job, d: date, manual: bool = False):
         k = job.key_of(j)
         with self._lock:
-            if j.board in self.busy:
+            if self.occupied(j.board):
                 return
             self.busy[j.board] = "작업"
         if not manual:
@@ -191,13 +196,16 @@ class Scheduler:
                 if r.get("ok"):
                     self._notify_success(j, d, r)
                 else:
-                    notify.telegram_async(f"⚠️ 업로드 실패\n{where}\n이유: {r.get('error', '')}")
+                    # 실패도 메일로 (2026-10-13 요청) — '강언업로드이력' 탭에도 한 줄 남아 이력이 됨
+                    notify.both_async("⚠️ 업로드 실패",
+                                      f"{d:%m/%d}({schedule.day_of(d)}) {where}\n이유: {r.get('error', '')}")
             except Exception as exc:                 # noqa: BLE001
                 self.log(f"!! {j.board}번 작업 중 오류: {type(exc).__name__}: {exc}")
                 traceback.print_exc()
                 if not manual:
                     self._mark(d, k, f"실패: {exc}")
-                notify.telegram_async(f"⚠️ 작업 중 오류\n{where}\n{type(exc).__name__}: {exc}")
+                notify.both_async("⚠️ 작업 중 오류",
+                                  f"{d:%m/%d}({schedule.day_of(d)}) {where}\n{type(exc).__name__}: {exc}")
             finally:
                 with self._lock:
                     self.busy.pop(j.board, None)
@@ -275,14 +283,14 @@ class Scheduler:
         running = sum(1 for v in self.busy.values() if v == "미리 로그인")
         for no, (start, j) in sorted(upcoming.items(), key=lambda kv: kv[1][0]):
             tag = f"{start:%Y-%m-%d %H:%M}"
-            if prepped.get(str(no)) == tag or no in self.busy or running >= MAX_PREP:
+            if prepped.get(str(no)) == tag or self.occupied(no) or running >= MAX_PREP:
                 continue
             running += 1
             self._start_prep(j, tag)
 
     def _start_prep(self, j: schedule.Job, tag: str):
         with self._lock:
-            if j.board in self.busy:
+            if self.occupied(j.board):
                 return
             self.busy[j.board] = "미리 로그인"
         self.on_change()
@@ -348,6 +356,11 @@ class Scheduler:
             Sheet().write(schedule.TAB, BEAT_CELL, [[f"{now:%Y-%m-%d %H:%M}"]], text=True)
         except Exception as exc:                     # noqa: BLE001
             self.log(f"!! 생존 신호(M1) 기록 실패: {exc}")
+
+    def invalidate(self):
+        """시트를 다음 바퀴(20초 안)에 다시 읽게. 대시보드 '시트 새로고침' 때 부름 — 시트에서
+        시간대를 바꿨는데 10분 동안 예정 시각이 안 뜨던 문제 (2026-10-14)."""
+        self._rows_at = 0
 
     def _load_rows(self, force: bool = False):
         if force or not self._rows or time.time() - self._rows_at > SHEET_EVERY:

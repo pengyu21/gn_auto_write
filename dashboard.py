@@ -1,4 +1,4 @@
-"""강언 로테이션 대시보드 — 1단계: 일정 보기 + 로그인 점검.
+"""강언/바비톡 로테이션 대시보드 — 일정 보기, 로그인 점검, 자동 실행 (앱별 탭).
 
     python dashboard.py
 
@@ -33,7 +33,10 @@ from core.board import ROOT, load_settings
 from core.board import Board
 from unni import job, login, schedule
 from unni.login import run_state
+from unni.remote import Remote
 from unni.scheduler import Scheduler
+from babitok import job as bjob, schedule as bschedule
+from babitok.scheduler import BabiScheduler
 from version import VERSION
 
 UI = ROOT / "ui" / "dashboard.html"
@@ -90,6 +93,25 @@ def steps_of(j: schedule.Job, state: str) -> list[dict]:
     return [s("로그인", "wait"), s("지난 글 삭제", "wait", old), s("새 글 업로드", "wait")]
 
 
+def babi_steps(j: bschedule.Job, state: str) -> list[dict]:
+    """바비톡 세 단계: 로그인 확인 / 지난 글 삭제 / 새 글 업로드."""
+    s = lambda k, st, n="": {"k": k, "s": st, "n": n}       # noqa: E731
+    if state in ("성공", "완료"):
+        return [s("로그인 확인", "ok"), s("지난 글 삭제", "ok", "지난 글 정리됨 (또는 없었음)"),
+                s("새 글 업로드", "ok", "등록")]
+    if state in ("실패", "보류"):
+        why = j.status.split(":", 1)[1].strip() if ":" in j.status else j.status
+        if "지난 글 삭제" in j.status:
+            return [s("로그인 확인", "ok"), s("지난 글 삭제", "fail", why),
+                    s("새 글 업로드", "hold", "지난 글이 남아 있어 보류")]
+        if "로그인" in why or "게시판 선택" in why:
+            return [s("로그인 확인", "fail", why), s("지난 글 삭제", "skip"), s("새 글 업로드", "skip")]
+        return [s("로그인 확인", "ok"), s("지난 글 삭제", "ok"), s("새 글 업로드", "fail", why)]
+    if state == "작업중":
+        return [s("로그인 확인", "run"), s("지난 글 삭제", "wait"), s("새 글 업로드", "wait")]
+    return [s("로그인 확인", "wait"), s("지난 글 삭제", "wait"), s("새 글 업로드", "wait")]
+
+
 class Api:
     def __init__(self):
         self._window = None
@@ -99,6 +121,11 @@ class Api:
         start = str(load_settings().get("rotation_start", "")).strip()
         self._start = date.fromisoformat(start) if start else None
         self._sched = Scheduler(log=self._log, on_change=self._changed)
+        # 바비톡: 같은 폰보드를 쓰므로 두 스케줄러가 서로의 작업 중인 폰을 기다림
+        self._brows: list[bschedule.Job] | None = None
+        self._bbusy = False
+        self._bsched = BabiScheduler(log=self._blog, on_change=self._changed, other=self._sched)
+        self._sched.other = self._bsched
 
     # -- 화면에서 부르는 것 --------------------------------------------------------
 
@@ -124,10 +151,14 @@ class Api:
         return VERSION
 
     def phones(self) -> dict:
-        return {str(k): v for k, v in load_state().items()}
+        # 작업 중 로그인(unni/login._record_state)이 남긴 칸엔 짧은 말이 없어 여기서 붙임
+        return {str(k): dict(v, tag=v.get("tag") or _tag(v.get("why", ""))) for k, v in load_state().items()}
 
     def reload(self, quiet: bool = False) -> int:
         self._rows = schedule.load_rows()
+        sched = getattr(self, "_sched", None)
+        if sched:
+            sched.invalidate()                         # 스케줄러도 바뀐 시간대로 예정 시각을 다시 정하게
         if not quiet:
             self._log(f"시트 '{schedule.TAB}' {len(self._rows)}행 읽음")
         return len(self._rows)
@@ -146,7 +177,7 @@ class Api:
 
     def check_login(self, panels) -> dict:
         nos = [int(n) for n in (panels or PHONES)]
-        working = sorted(n for n in nos if n in self._sched.busy)
+        working = sorted(n for n in nos if self._sched.occupied(n))
         if working:
             # 작업 중인 폰은 화면을 건드리면 안 됩니다.
             self._log(f"작업 중이라 점검에서 뺌: {working}")
@@ -172,6 +203,7 @@ class Api:
                 state[no] = {"state": st, "nick": nick, "at": at}
             self._explain(state, [n for n in nos if state[n]["state"] != "in"])
             save_state(state)
+            self._changed()                            # 화면(PC·웹) 폰보드 바로 다시 그림
             bad = [n for n in nos if state[n]["state"] != "in"]
             for n in bad:
                 self._log(f"  {n}번 {state[n].get('tag', '')}: {state[n].get('why', '')}")
@@ -252,8 +284,124 @@ class Api:
                 "note": "제외 (settings.json skip_boards / skip_accounts)" if excluded
                         else "시간이 지나 건너뜀" if skipped else ""}
 
+    # -- 바비톡 (화면에서 babi_* 로 부름) -------------------------------------------------
+
+    def babi_month(self, year: int, month: int) -> dict:
+        rows = self._bload()
+        today = date.today()
+        days = []
+        for n in range(1, calendar.monthrange(year, month)[1] + 1):
+            d = date(year, month, n)
+            jobs = bschedule.jobs_on(rows, d)
+            plan, done = self._bsched.planned(d), self._bsched.done_keys(d)
+            days.append({"day": n, "week": bschedule.week_of(d), "dn": bschedule.day_of(d),
+                         "skip": jobs is None,
+                         "jobs": [self._bjob(j, d, today, plan, done) for j in (jobs or [])]})
+        return {"year": year, "month": month, "today": today.isoformat(),
+                "parity": bschedule.parity_of(date(year, month, 1)),
+                "offset": bschedule.first_offset(year, month), "days": days}
+
+    def babi_phones(self) -> dict:
+        return {k: dict(v, tag=v.get("tag") or _tag(v.get("why", ""))) for k, v in bjob.load_state().items()}
+
+    def babi_reload(self, quiet: bool = False) -> int:
+        self._brows = bschedule.load_rows()
+        self._bsched.invalidate()
+        if not quiet:
+            self._blog(f"시트 '{bschedule.TAB}' {len(self._brows)}행 읽음")
+        return len(self._brows)
+
+    def babi_auto_status(self) -> dict:
+        return self._bsched.status()
+
+    def babi_set_auto(self, on: bool) -> dict:
+        self._bsched.set_enabled(bool(on))
+        return self._bsched.status()
+
+    def babi_run_now(self, key: str) -> str:
+        r = self._bsched.run_now(str(key))
+        self._blog(f"지금 실행 {key}: {r}")
+        return r
+
+    def babi_check_login(self, panels) -> dict:
+        """바비톡 로그인 점검 — 폰마다 커뮤니티 > 글쓰기 를 눌러 봄. 작업 중인 폰은 뺌. 동시에 8대."""
+        nos = [int(n) for n in (panels or PHONES)]
+        with self._lock:
+            if self._bbusy:
+                self._blog("로그인 점검이 이미 진행 중입니다.")
+                return {"ok": False}
+            self._bbusy = True
+        try:
+            held = [n for n in nos if self._bsched.hold(n, "점검")]
+            skipped = sorted(set(nos) - set(held))
+            if skipped:
+                self._blog(f"작업 중이라 점검에서 뺌: {skipped}")
+            self._blog(f"로그인 점검 시작: {len(held)}대")
+            self._changed()
+            sem = threading.Semaphore(8)
+
+            def one(no):
+                with sem:
+                    try:
+                        r = bjob.check_login(no, log=lambda m: None)
+                    except Exception as exc:           # noqa: BLE001
+                        r = {"state": "unknown", "nick": "", "why": f"{type(exc).__name__}: {exc}"}
+                    finally:
+                        self._bsched.release(no)
+                    bjob.note_state(no, r)
+                    self._blog(f"  {no}: " + ("로그인됨" if r["state"] == "in" else f"{r['state']} — {r['why']}"))
+            ts = [threading.Thread(target=one, args=(n,), daemon=True) for n in held]
+            for th in ts:
+                th.start()
+            for th in ts:
+                th.join()
+            st = bjob.load_state()
+            bad = [n for n in held if st.get(str(n), {}).get("state") != "in"]
+            self._blog(f"로그인 점검 끝: 로그인됨 {len(held) - len(bad)}대" + (f", 안 됨 {bad}" if bad else ""))
+            self._changed()
+            return {"ok": True}
+        finally:
+            self._bbusy = False
+
+    def _bload(self) -> list[bschedule.Job]:
+        if self._brows is None:
+            self.babi_reload(quiet=True)
+        return self._brows
+
+    def _bjob(self, j: bschedule.Job, d: date, today: date, plan=None, done=None) -> dict:
+        key = bschedule.key_of(j)
+        state = j.state_on(d, today)
+        busy = self._bsched.busy.get(j.board) if d == today else None
+        if busy == "작업" and state in ("예정", "미실행"):
+            state = "작업중"
+        mark = (done or {}).get(key, "")
+        skipped = mark.startswith("건너뜀")
+        excluded = self._bsched.is_skipped(j)
+        if state == "예정" and d == today and datetime.now().hour > j.hour:
+            state, skipped = "미실행", True             # 자동 실행이 꺼져 있어도 지난 시간대는 지난 것으로
+        if excluded and state in ("예정", "미실행"):
+            state = "제외"
+        elif skipped and state in ("예정", "미실행"):
+            state = "미실행"
+        mine = j.done_on(d)
+        t = bschedule.parse_uploaded(j.uploaded)
+        shown = f"{t:%Y-%m-%d} ({bschedule.day_of(t.date())}) {t:%H:%M}" if t else j.uploaded
+        return {"row": j.row, "hour": j.hour, "board": j.board, "parity": j.parity, "surgery": j.surgery,
+                "topic": j.topic, "title": j.title, "state": state, "status": j.status,
+                "uploaded": shown if mine else "", "account": j.account if mine else "", "text": j.text,
+                "steps": babi_steps(j, state), "key": key, "plan": (plan or {}).get(key, ""),
+                "busy": busy or "",
+                "note": "제외 (settings.json babi_skip_boards)" if excluded
+                        else "시간이 지나 건너뜀" if skipped else ""}
+
+    def _blog(self, line: str):
+        self._log(f"[바비톡] {str(line).lstrip()}")
+
     def _changed(self):
-        """스케줄러 상태가 바뀌면 화면에 알림 (작업 시작/끝, 미리 로그인)."""
+        """스케줄러 상태가 바뀌면 화면에 알림 (작업 시작/끝, 미리 로그인). 웹앱에도 바로 보냄."""
+        remote = getattr(self, "_remote", None)
+        if remote:
+            remote.poke()
         if self._window:
             try:
                 self._window.evaluate_js("window.onAuto && onAuto()")
@@ -263,6 +411,38 @@ class Api:
     def logs(self) -> list:
         """최근 로그 [(시각, 줄)…] — 화면이 처음 뜰 때 불러감."""
         return list(LOG_BUFFER)
+
+    def snapshot(self) -> dict:
+        """웹앱(시트)으로 보낼 지금 대시보드 값 — 화면이 쓰는 것과 똑같은 데이터.
+        지난달·이번 달·다음 달 달력, 폰 상태, 자동 실행 상태, 최근 로그."""
+        t = date.today()
+        months, texts = {}, {}
+        for k in (-1, 0, 1):
+            y, m = t.year, t.month + k
+            y, m = (y - 1, 12) if m < 1 else (y + 1, 1) if m > 12 else (y, m)
+            mm = self.month(y, m)
+            for dd in mm["days"]:                       # 같은 글이 달마다 반복되므로 글은 따로 한 번만
+                for idx, j in enumerate(dd["jobs"]):
+                    texts[j["key"]] = j.pop("text", "")
+                    # 크기 줄이기: 빈 값은 빼고, 단계 이름(로그인/지난 글 삭제/새 글 업로드)은 웹앱이 채움
+                    j["steps"] = [[s["s"], s["n"]] if s["n"] else [s["s"]] for s in j["steps"]]
+                    dd["jobs"][idx] = {k: v for k, v in j.items() if v not in ("", None)}
+            months[f"{y}-{m}"] = mm
+        bmonths = {}
+        for k in (-1, 0, 1):
+            y, m = t.year, t.month + k
+            y, m = (y - 1, 12) if m < 1 else (y + 1, 1) if m > 12 else (y, m)
+            mm = self.babi_month(y, m)
+            for dd in mm["days"]:
+                for idx, j in enumerate(dd["jobs"]):
+                    texts[j["key"]] = j.pop("text", "")
+                    j["steps"] = [[s["s"], s["n"]] if s["n"] else [s["s"]] for s in j["steps"]]
+                    dd["jobs"][idx] = {k: v for k, v in j.items() if v not in ("", None)}
+            bmonths[f"{y}-{m}"] = mm
+        return {"version": VERSION, "today": t.isoformat(), "months": months, "texts": texts,
+                "phones": self.phones(), "auto": self._sched.status(),
+                "babi": {"months": bmonths, "phones": self.babi_phones(), "auto": self._bsched.status()},
+                "logs": list(LOG_BUFFER)[-150:]}
 
     def _log(self, line: str):
         # print 는 쓰지 않습니다 — run_state 가 print 를 이 함수로 돌려보내서 무한 반복됩니다.
@@ -291,7 +471,7 @@ def _single_instance() -> bool:
         _single_instance.handle = k32.CreateMutexW(None, False, "Local\\gangeon_rotation_dashboard")
         if k32.GetLastError() == 183:                  # ERROR_ALREADY_EXISTS
             ctypes.windll.user32.MessageBoxW(None, "대시보드가 이미 실행 중입니다.\n작업 표시줄에서 기존 창을 찾아 주세요.",
-                                             "강언 로테이션 대시보드", 0x40)
+                                             "강언/바비톡 로테이션 대시보드", 0x40)
             return False
     except (AttributeError, OSError):
         pass
@@ -306,11 +486,14 @@ def main():
     api = Api()
     # 글 주소(target=_blank)는 대시보드 창이 아니라 PC 기본 브라우저로 엽니다.
     webview.settings["OPEN_EXTERNAL_LINKS_IN_BROWSER"] = True
-    window = webview.create_window("강언 로테이션 대시보드", url=str(UI), js_api=api,
+    window = webview.create_window("강언/바비톡 로테이션 대시보드", url=str(UI), js_api=api,
                                    width=1440, height=900, min_size=(1100, 720),
                                    maximized=True, background_color="#EDF1F0")
     api._window = window
     api._sched.start()            # 꺼져 있으면 생존 신호(M1)만 적고 작업은 안 함
+    api._bsched.start()           # 바비톡도 같은 방식 (처음엔 꺼짐)
+    api._remote = Remote(api, api._log)
+    api._remote.start()           # 웹앱 연동: 값 보내기 + 웹앱 명령 받기
     webview.start()
 
 

@@ -15,6 +15,7 @@
 from __future__ import annotations
 
 import calendar
+import functools
 import re
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
@@ -59,9 +60,10 @@ class Job:
     account: str = ""   # M 업로드 계정
 
     def done_on(self, d: date) -> bool:
-        """그 날짜에 업로드 기록이 있는가."""
+        """그 날짜 차례의 업로드 기록이 있는가 — 그날부터 이 줄의 다음 차례 전까지 올라갔으면 됨.
+        (놓친 글을 며칠 뒤 손으로 올려도 그날 작업이 '성공' 으로 보이게, 2026-10-14 10/12 79번)"""
         t = parse_uploaded(self.uploaded)
-        return bool(t) and t.date() == d
+        return bool(t) and d <= t.date() < next_turn(self.week, self.day, d)
 
     def state_on(self, d: date, today: Optional[date] = None) -> str:
         """그 날짜 기준 표시 상태: I열 값 / '미실행' / '예정'."""
@@ -153,6 +155,16 @@ def week_of(d: date) -> int:
 
 def day_of(d: date) -> str:
     return DAYS[(d.weekday() + 1) % 7]
+
+
+@functools.lru_cache(maxsize=4096)
+def next_turn(week: int, day: str, d: date) -> date:
+    """d 다음으로 이 줄(N주차 X요일)이 다시 돌아오는 날. 보통 한 달 뒤."""
+    for k in range(1, 80):
+        x = d + timedelta(days=k)
+        if week_of(x) == week and day_of(x) == day:
+            return x
+    return d + timedelta(days=80)
 
 
 def jobs_on(rows: list[Job], d: date) -> Optional[list[Job]]:

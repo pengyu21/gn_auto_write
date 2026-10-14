@@ -41,11 +41,13 @@ def telegram_async(text: str):
     threading.Thread(target=telegram, args=(text,), daemon=True).start()
 
 
-MAIL_TAB = "알림"     # 시트 탭. Watch.gs 가 5분마다 읽어 메일로 보내고 'D 메일 보냄' 에 시각을 적음
+# 시트 탭. Watch.gs 가 5분마다 읽어 메일로 보내고 'D 메일 보냄' 에 시각을 적음.
+# 2026-10-12 '알림' -> '강언업로드이력' (시트에 탭이 늘어날 예정이라 이름으로 구분). Watch.gs 와 같은 이름이어야 함.
+MAIL_TAB = "강언업로드이력"
 
 
 def queue_mail(title: str, body: str) -> bool:
-    """메일 보낼 내용을 시트 '알림' 탭에 한 줄 붙입니다 (보내는 건 시트 Apps Script).
+    """메일 보낼 내용을 시트 '강언업로드이력' 탭에 한 줄 붙입니다 (보내는 건 시트 Apps Script).
     이 PC 에 메일 계정·비밀번호를 두지 않으려고 이렇게 합니다."""
     try:
         from datetime import datetime

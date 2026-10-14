@@ -1,7 +1,9 @@
 """크롬: 주소 열기, 앞에 있는지 확인, 기본 브라우저 지정, 탭 모두 닫기."""
 from __future__ import annotations
 
+import re
 import time
+from typing import Optional
 
 from . import screen
 from .board import Board
@@ -101,8 +103,38 @@ def _close_step(xml):
     return "뒤로", BACK, False
 
 
-def close_all_tabs(board: Board, devs, max_steps: int = 6):
-    """크롬 탭을 전부 닫습니다. 로그인은 쿠키에 남아 풀리지 않습니다."""
+def tab_count(xml) -> Optional[int]:
+    """크롬 화면의 탭 개수 ('2519개 탭 보기' 버튼 / 탭 전환 화면 '일반 탭 2519개'). 못 읽으면 None."""
+    if not xml:
+        return None
+    if EMPTY_SWITCHER in xml:
+        return 0
+    m = re.search(r"(\d+)개 탭", xml) or re.search(r"탭 (\d+)개", xml)
+    return int(m.group(1)) if m else None
+
+
+def close_all_tabs(board: Board, devs, max_steps: int = 6, _retry: bool = True) -> dict[int, int]:
+    """크롬 탭을 전부 닫습니다. 로그인은 쿠키에 남아 풀리지 않습니다.
+
+    '확인' 을 누른 것만으로 끝났다고 보면 안 됩니다 — 탭이 2500개 쌓인 60·94번은
+    누를 때마다 크롬이 다시 뜨며 탭이 그대로 돌아왔습니다 (2026-10-13). 그래서 끝에
+    탭 수를 다시 세어, 남았으면 한 번 더 하고 그래도 남으면 돌려줍니다 {번호: 남은 탭 수}."""
+    _close_all_once(board, devs, max_steps)
+    time.sleep(2.0)
+    ready = _bring_up(board, devs, tries=1)
+    screens = screen.dump(board, ready)
+    left = {d: tab_count(screens.get(d.no)) for d in ready}
+    left = {d: n for d, n in left.items() if n and n > 1}
+    if left and _retry:
+        print(f"  탭이 남아 다시 닫음: {sorted((d.no, n) for d, n in left.items())}")
+        return close_all_tabs(board, list(left), max_steps, _retry=False)
+    board.key(4, ready)                            # 탭 전환 화면을 열어 둔 채 끝나지 않게
+    if left:
+        print(f"  !! 탭이 안 줄어든 기기: {sorted((d.no, n) for d, n in left.items())} — 크롬에서 직접 정리 필요")
+    return {d.no: n for d, n in left.items()}
+
+
+def _close_all_once(board: Board, devs, max_steps: int):
     board.key(224, devs)
     make_default(board, devs)
     pending = _bring_up(board, devs)

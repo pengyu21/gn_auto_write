@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>강언 로테이션 대시보드</title>
+<title>강언/바비톡 로테이션 대시보드</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap">
 <style>
 /* 운영자 대시보드 — 위 상태줄, 왼쪽 그날 작업(3단계 파이프라인), 오른쪽 폰보드 40칸, 아래 달력과 로그. 상세는 오른쪽 서랍. */
@@ -43,6 +43,11 @@ button{font:inherit;color:inherit}
 .auto.off-window{background:var(--hold-bg);color:var(--hold);border-color:var(--hold)}
 @keyframes blink{50%{opacity:.35}}
 .btn.danger{background:var(--fail);border-color:var(--fail);color:#fff}
+.sync{font-size:12px;font-weight:600;color:var(--muted);background:var(--panel-2);border:1px solid var(--line);border-radius:999px;padding:4px 10px}
+.sync.stale{color:var(--fail);background:var(--fail-bg);border-color:var(--fail)}
+/* 웹앱 보기 전용(시트 주인이 아닌 사람): 실제로 폰을 움직이는 버튼은 숨김 */
+body.readonly #checkBtn,body.readonly .actions,body.readonly [data-check]{display:none!important}
+body.readonly #autoBtn{pointer-events:none}
 .busy{color:var(--run);font-weight:600;font-size:13px}
 .btn{border:1px solid var(--line);background:var(--panel-2);border-radius:8px;padding:6px 12px;cursor:pointer;font-weight:500}
 .btn:hover{border-color:var(--accent)}
@@ -106,8 +111,13 @@ button{font:inherit;color:inherit}
 .tile.none .lb{color:var(--muted)}
 .tile.assigned{box-shadow:inset 0 0 0 2px var(--accent)}
 .alerts{margin-top:12px;display:grid;gap:6px}
-.alert{display:flex;gap:8px;align-items:center;font-size:13px;padding:7px 10px;border-radius:8px}
-.alert b{font-family:var(--f-num)}
+/* 문제 폰 한 줄: 번호 | 짧은 이유(칩) | 긴 설명 (+ 이날 작업 있음) — 줄이 넘어가도 설명 칸 안에서만 */
+.alert{display:grid;grid-template-columns:34px auto minmax(0,1fr);gap:4px 10px;align-items:start;font-size:13px;line-height:1.45;padding:8px 10px;border-radius:8px;border:1px solid transparent}
+.alert .an{font-family:var(--f-num);font-weight:700;font-size:14px}
+.alert .at{font-weight:700;white-space:nowrap}
+.alert .ad{color:var(--ink);opacity:.8;min-width:0;overflow-wrap:anywhere}
+.alert .aw{display:inline-block;margin-left:6px;font-size:11px;font-weight:700;padding:0 6px;border-radius:4px;background:var(--panel);border:1px solid currentColor;white-space:nowrap}
+.alert.c-fail{border-color:#F1C4BE} .alert.c-hold{border-color:#EAD9AE} .alert.c-gone{border-color:var(--line)}
 
 .calhead{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin-bottom:10px}
 .calhead h2{margin:0;font-size:15px;min-width:110px;text-align:center}
@@ -154,11 +164,20 @@ button{font:inherit;color:inherit}
 .drow .up a:hover{text-decoration:underline}
 .drow .up div{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 /* 두 단: 왼쪽 작업 목록·달력, 오른쪽 폰보드·로그 (오른쪽은 아래로 내려도 따라옴) */
-.col{display:grid;gap:14px;align-content:start;min-width:0}
-.side{position:sticky;top:92px;max-height:calc(100vh - 104px);display:flex;flex-direction:column;gap:14px}
-.boardpanel{flex:none;overflow:auto;max-height:60vh}
-.boardpanel .alerts{max-height:150px;overflow:auto}
-.logpanel{flex:1 1 auto;min-height:260px;display:flex;flex-direction:column}
+/* 4분할 — 위 = 작업 목록 | 폰보드, 아래 = 달력 | 로그. 칸 안에서 스크롤하지 않고 내용만큼 늘어나
+   목록·폰보드·달력이 한눈에 다 보이게 (2026-10-13 요청). 같은 줄의 두 칸은 높이를 맞춤.
+   로그만 길어서, 옆 달력 높이에 맞춘 칸 안에서 스크롤. */
+.quad{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:14px;align-items:stretch}
+.q{display:flex;flex-direction:column;min-height:0;padding:14px 16px}
+.q > .ph,.q > .calhead,.q > .legend{flex:none}
+.qbody{flex:1 1 auto}
+.q .jobs{align-content:start}
+.boardpanel .legend{margin-bottom:10px}
+/* 4분할에선 작업 칸이 좁아 앞 칸들을 줄이고 가운데(글·3단계)를 넓힘 */
+.quad .row{grid-template-columns:54px 46px 56px 82px minmax(0,1fr) 180px 46px;gap:8px;padding:8px 10px}
+.quad .row .no{font-size:20px} .quad .pill{padding:3px 7px}
+.logpanel{min-height:320px}
+.logpanel .logbox{flex:1 1 0;height:0;min-height:0}   /* 내용이 칸을 늘리지 않게 — 높이는 옆 달력이 정함 */
 .logbox{flex:1;min-height:0;overflow:auto;font-family:var(--f-num);font-size:12px;line-height:1.55;background:var(--panel-2);border:1px solid var(--line);border-radius:8px;padding:6px 10px}
 .logbox .ln{display:grid;grid-template-columns:62px minmax(0,1fr);gap:8px;padding:2px 0;border-bottom:1px dashed var(--line);overflow-wrap:anywhere}
 .logbox .ln time{color:var(--muted)}
@@ -166,8 +185,8 @@ button{font:inherit;color:inherit}
 .logbox .empty-log{color:var(--muted);padding:8px 0}
 .btn.tiny{padding:2px 9px;font-size:12px}
 .btn.tiny[aria-pressed="true"]{background:var(--fail-bg);border-color:var(--fail);color:var(--fail)}
-#jobsPanel{scroll-margin-top:96px}
-@media (max-width:1000px){.side{position:static;max-height:none}.logpanel{height:360px}}
+/* 좁은 화면(노트북 세로·폰): 한 줄로 쌓고 칸 높이는 내용대로 */
+@media (max-width:1100px){.quad{grid-template-columns:minmax(0,1fr)}.logpanel{height:360px}}
 
 /* 작업 목록 한 줄 (예전 '작업 목록' + '달력 아래 목록' 을 하나로) */
 .row{all:unset;box-sizing:border-box;cursor:pointer;display:grid;grid-template-columns:62px 52px 62px 96px minmax(0,1fr) 205px 58px;gap:10px;align-items:center;padding:9px 12px;border:1px solid var(--line);border-left:4px solid var(--wait);border-radius:8px;background:var(--panel)}
@@ -187,8 +206,8 @@ button{font:inherit;color:inherit}
 .pipe.mini li{font-size:11px} .pipe.mini li::before{width:15px;height:15px;font-size:9px}
 @media (max-width:1300px){.row{grid-template-columns:58px 48px 58px 90px minmax(0,1fr) 58px}.row .up{display:none}}
 
-.scrim{position:fixed;inset:0;background:rgba(10,20,18,.35)}
-.drawer{position:fixed;top:0;right:0;bottom:0;width:min(480px,100%);background:var(--panel);border-left:1px solid var(--line);padding:20px 18px;overflow-y:auto;display:grid;align-content:start;gap:16px;box-shadow:-12px 0 30px -18px rgba(0,0,0,.4)}
+.scrim{position:fixed;inset:0;z-index:30;background:rgba(10,20,18,.35)}  /* 틀고정 머리(z 20)보다 위 */
+.drawer{position:fixed;top:0;right:0;bottom:0;z-index:40;width:min(480px,100%);background:var(--panel);border-left:1px solid var(--line);padding:20px 18px;overflow-y:auto;display:grid;align-content:start;gap:16px;box-shadow:-12px 0 30px -18px rgba(0,0,0,.4)}
 .dh{display:flex;align-items:center;gap:10px}
 .dh h3{margin:0;font-size:18px} .dh .x{margin-left:auto}
 .kv{display:grid;grid-template-columns:auto minmax(0,1fr);gap:6px 14px;font-size:13px;margin:0}
@@ -206,7 +225,25 @@ button{font:inherit;color:inherit}
 .hist{display:grid;gap:6px}
 .hist .h{display:grid;grid-template-columns:72px 58px minmax(0,1fr) auto;gap:8px;align-items:center;font-size:13px;padding:6px 8px;border:1px solid var(--line);border-radius:6px}
 h4{margin:0 0 6px;font-size:13px;color:var(--muted);font-weight:600}
-.loading{position:fixed;inset:0;display:grid;place-items:center;background:var(--bg);font-size:15px;color:var(--muted)}
+/* 앱 탭 (강남언니 | 바비톡) */
+.apptabs{display:inline-flex;background:var(--panel-2);border:1px solid var(--line);border-radius:10px;padding:3px;gap:3px}
+.apptabs button{all:unset;cursor:pointer;padding:7px 16px;border-radius:7px;font-weight:700;font-size:14px;color:var(--muted);display:inline-flex;gap:7px;align-items:center}
+.apptabs button:focus-visible{outline:2px solid var(--accent)}
+.apptabs button[aria-selected="true"]{background:var(--panel);color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.12)}
+.apptabs .dotn{font-family:var(--f-num);font-size:11px;padding:0 6px;border-radius:999px;background:var(--run-bg);color:var(--run)}
+.apptabs .dotn:empty{display:none}
+.apptabs .unni{color:var(--r1)} .apptabs .babi{color:var(--r4)}
+/* 바비톡 줄: 홀/짝 배지, 주제 칩, 제목 줄 */
+.par{display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;padding:3px 8px;border-radius:6px;color:#fff;background:var(--r4)}
+.par.odd{background:var(--r5)}
+.topic{display:inline-block;font-size:11px;font-weight:700;padding:1px 7px;border-radius:5px;background:#EFE8FB;color:#6A3CC8}
+.row .tt{font-weight:600;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.row .tx.sm{color:var(--muted);font-size:12px}
+.tile .other{position:absolute;left:5px;top:4px;font-size:9px;font-weight:700;color:var(--r1)}
+.tile .other.b{color:var(--r4)}
+.logapp{display:inline-flex;gap:4px;margin-right:6px}
+.logapp .btn.tiny[aria-pressed="true"]{background:var(--run-bg);border-color:var(--run);color:var(--run)}
+.loading{position:fixed;inset:0;z-index:50;display:grid;place-items:center;background:var(--bg);font-size:15px;color:var(--muted)}
 @keyframes spin{to{transform:rotate(360deg)}}
 @media (prefers-reduced-motion:reduce){*{animation:none!important}}
 </style>
@@ -216,60 +253,71 @@ h4{margin:0 0 6px;font-size:13px;color:var(--muted);font-weight:600}
 
 <div class="wrap">
   <header class="top">
-    <div class="brand"><small>강남언니 · 폰보드 60–99</small><b>로테이션 대시보드 <span class="ver" id="ver"></span></b></div>
+    <div class="brand"><small>폰보드 60–99</small><b>강언/바비톡 로테이션 대시보드 <span class="ver" id="ver"></span></b></div>
+    <!-- 앱 탭: 누르면 아래 4분할이 그 앱 내용으로 바뀜. 옆 숫자 = 오늘 건수 -->
+    <div class="apptabs" role="tablist">
+      <button type="button" data-app="unni" role="tab"><span class="unni">●</span>강남언니 <span class="dotn" id="cntUnni"></span></button>
+      <button type="button" data-app="babi" role="tab"><span class="babi">●</span>바비톡 <span class="dotn" id="cntBabi"></span></button>
+    </div>
     <div class="today"><span class="d num" id="todayLabel"></span><span class="w" id="weekLabel"></span></div>
     <div class="tools">
       <span class="busy" id="busy"></span>
+      <span class="sync" id="sync" hidden></span>
       <button class="auto" id="autoBtn" type="button" title="눌러서 켜기/끄기"><i></i><span id="autoText">자동 실행 …</span></button>
       <button class="btn" id="reloadBtn" type="button">시트 새로고침</button>
       <button class="btn primary" id="checkBtn" type="button">로그인 점검 (전체)</button>
     </div>
   </header>
 
-  <!-- 왼쪽: 작업 목록(하나로 통합) → 달력  |  오른쪽(따라 내려옴): 폰보드 → 로그 -->
-  <div class="main">
-    <div class="col">
-      <section class="panel" id="jobsPanel">
-        <div class="ph"><h2>작업 목록</h2><span class="sub" id="jobsSub"></span><div class="chips" id="jobChips"></div></div>
-        <div class="jobs" id="jobs"></div>
-      </section>
+  <!-- 4분할: 위 = 작업 목록 | 폰보드, 아래 = 달력 | 로그. 한 화면에 꽉 차고 칸마다 따로 스크롤 -->
+  <div class="quad">
+    <section class="panel q" id="jobsPanel">
+      <div class="ph"><h2>작업 목록</h2><span class="sub" id="jobsSub"></span><div class="chips" id="jobChips"></div></div>
+      <div class="qbody jobs" id="jobs"></div>
+    </section>
 
-      <section class="panel">
-        <div class="calhead">
-          <button class="btn" id="prevBtn" type="button" aria-label="이전 달">◀</button>
-          <h2 id="calTitle"></h2>
-          <button class="btn" id="nextBtn" type="button" aria-label="다음 달">▶</button>
-          <button class="btn" id="todayBtn" type="button">오늘</button>
-          <span class="sub">일요일 시작 (시트와 같음) · 날짜를 누르면 위 작업 목록이 그날로 바뀝니다</span>
-          <div class="chips" id="monthChips"></div>
-        </div>
-        <div class="cal" id="cal"></div>
-        <p class="calnote" id="calNote"></p>
-      </section>
-    </div>
-
-    <div class="col side">
-      <section class="panel boardpanel">
-        <div class="ph"><h2>폰보드</h2><span class="sub" id="checked"></span></div>
-        <div class="legend">
-          <span><i class="sw" style="background:var(--ok)"></i>로그인됨</span>
-          <span><i class="sw" style="background:var(--hold)"></i>로그인 안 됨</span>
-          <span><i class="sw" style="background:var(--fail)"></i>판독 불가</span>
-          <span><i class="sw" style="background:var(--gone)"></i>연결 안 됨</span>
-          <span><i class="sw" style="box-shadow:inset 0 0 0 2px var(--accent)"></i>고른 날 작업 (색 = 로테이션)</span>
-        </div>
+    <section class="panel q boardpanel">
+      <div class="ph"><h2>폰보드</h2><span class="sub" id="checked"></span></div>
+      <div class="legend">
+        <span><i class="sw" style="background:var(--ok)"></i>로그인됨</span>
+        <span><i class="sw" style="background:var(--hold)"></i>로그인 안 됨</span>
+        <span><i class="sw" style="background:var(--fail)"></i>판독 불가</span>
+        <span><i class="sw" style="background:var(--gone)"></i>연결 안 됨</span>
+        <span><i class="sw" style="box-shadow:inset 0 0 0 2px var(--accent)"></i>고른 날 작업 (색 = 로테이션)</span>
+      </div>
+      <div class="qbody">
         <div class="board" id="board"></div>
         <div class="alerts" id="alerts"></div>
-      </section>
+      </div>
+    </section>
 
-      <section class="panel logpanel">
-        <div class="ph"><h2>로그</h2><span class="sub" id="logCount"></span>
-          <div class="chips">
-            <button class="btn tiny" id="logOnlyBad" type="button" aria-pressed="false">문제만</button>
-          </div></div>
-        <div class="logbox" id="log" aria-live="polite"></div>
-      </section>
-    </div>
+    <section class="panel q calpanel">
+      <div class="calhead">
+        <button class="btn" id="prevBtn" type="button" aria-label="이전 달">◀</button>
+        <h2 id="calTitle"></h2>
+        <button class="btn" id="nextBtn" type="button" aria-label="다음 달">▶</button>
+        <button class="btn" id="todayBtn" type="button">오늘</button>
+        <span class="sub">날짜를 누르면 작업 목록이 그날로 바뀝니다</span>
+        <div class="chips" id="monthChips"></div>
+      </div>
+      <div class="qbody">
+        <div class="cal" id="cal"></div>
+        <p class="calnote" id="calNote"></p>
+      </div>
+    </section>
+
+    <section class="panel q logpanel">
+      <div class="ph"><h2>로그</h2><span class="sub" id="logCount"></span>
+        <div class="chips">
+          <span class="logapp" id="logApp">
+            <button class="btn tiny" type="button" data-log="all" aria-pressed="true">전체</button>
+            <button class="btn tiny" type="button" data-log="unni" aria-pressed="false">강남언니</button>
+            <button class="btn tiny" type="button" data-log="babi" aria-pressed="false">바비톡</button>
+          </span>
+          <button class="btn tiny" id="logOnlyBad" type="button" aria-pressed="false">문제만</button>
+        </div></div>
+      <div class="logbox" id="log" aria-live="polite"></div>
+    </section>
   </div>
 </div>
 
@@ -282,6 +330,11 @@ const WEEK_ORDER = '일월화수목금토';    // 달력 칸 순서 — 시트�
 const CLS = {'제외':'none','성공':'ok','완료':'ok','실패':'fail','보류':'hold','작업중':'run','예정':'wait','미실행':'miss','기록 없음':'none'};
 const PHONE = {in:'로그인됨', out:'로그인 안 됨', unknown:'판독 불가', gone:'연결 안 됨'};
 let M = null, PH = {}, view = null, sel = 1, today = null, busy = false;
+// 앱 탭: 'unni'(강남언니) / 'babi'(바비톡). 같은 4분할을 앱에 따라 다른 데이터로 그림.
+let APP = (() => { try { return localStorage.getItem('app') === 'babi' ? 'babi' : 'unni'; } catch (e) { return 'unni'; } })();
+let AUTO_U = null, AUTO_B = null;                 // 두 앱 자동 실행 상태 (탭 숫자·겹침 표시에 둘 다 씀)
+const isBabi = () => APP === 'babi';
+const APP_NAME = {unni: '강남언니', babi: '바비톡'};
 
 const $ = id => document.getElementById(id);
 const pad = n => String(n).padStart(2, '0');
@@ -289,17 +342,76 @@ const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;
 const isThisMonth = () => view && today && view.y === today.getFullYear() && view.m === today.getMonth() + 1;
 const dayData = d => M.days[d - 1];
 
+// ── 두 곳에서 같은 화면을 씁니다 ─────────────────────────────────────────────
+//  PC 프로그램(pywebview): 파이썬 Api 를 바로 부름.
+//  웹앱(구글 Apps Script, appsscript/DashWeb.html): PC 가 시트 '강언대시보드' 탭에 보낸 값을 읽고,
+//  버튼은 시트 '강언대시보드명령' 탭에 명령을 남겨 PC 가 30초 안에 실행.
+const IS_WEB = typeof google !== 'undefined' && google.script && google.script.run;
+const STEP_NAMES = {unni: ['로그인', '지난 글 삭제', '새 글 업로드'], babi: ['로그인 확인', '지난 글 삭제', '새 글 업로드']};
+let SNAP = null, CAN = !IS_WEB;   // CAN: 버튼을 쓸 수 있는지 (웹앱은 시트 주인만, 나머지는 보기 전용)
+const gs = (fn, ...args) => new Promise((ok, bad) =>
+  google.script.run.withSuccessHandler(ok).withFailureHandler(bad)[fn](...args));
+async function fetchSnap() {
+  const raw = await gs('dashSnapshot');
+  if (!raw) throw new Error('PC 가 아직 값을 보내지 않았습니다 (대시보드 프로그램이 켜져 있는지 확인)');
+  SNAP = JSON.parse(raw);
+  return SNAP;
+}
+function webMonth(y, m, app = 'unni') {
+  const src = app === 'babi' ? (SNAP.babi || {}).months : SNAP.months;
+  const mm = src && src[`${y}-${m}`];
+  if (!mm) throw new Error(`${y}년 ${m}월은 웹에서 볼 수 없습니다 (지난달~다음 달만)`);
+  const out = JSON.parse(JSON.stringify(mm));
+  out.days.forEach(dd => dd.jobs = dd.jobs.map(j => Object.assign(
+    {status: '', deleted: '', uploaded: '', url: '', account: '', plan: '', busy: '', note: '', category: '',
+     title: '', topic: '', parity: ''}, j, {
+      text: SNAP.texts[j.key] || '',
+      steps: (j.steps || []).map((s, i) => ({k: STEP_NAMES[app][i], s: s[0], n: s[1] || ''})),
+    })));
+  return out;
+}
+async function sendCmd(cmd, arg) {
+  if (!CAN) throw new Error('보기 전용입니다');
+  await gs('dashCommand', cmd, String(arg ?? ''));
+  onLog(`웹에서 보낸 명령: ${cmd} ${arg ?? ''} — PC 가 30초 안에 실행합니다`);
+}
+const webApi = {
+  month: async (y, m) => webMonth(y, m),
+  phones: async () => SNAP.phones,
+  auto_status: async () => SNAP.auto,
+  logs: async () => SNAP.logs,
+  version: async () => SNAP.version,
+  reload: async () => { if (CAN) await sendCmd('reload'); await fetchSnap(); return 0; },
+  set_auto: async on => { await sendCmd('auto', on ? 'on' : 'off'); return Object.assign({}, SNAP.auto, {enabled: on}); },
+  run_now: async key => { await sendCmd('run_now', key); return 'PC 로 보냄 — 30초 안에 시작합니다'; },
+  check_login: async nos => { await sendCmd('check_login', (nos || []).join(',')); return {ok: true}; },
+  // 바비톡 탭
+  babi_month: async (y, m) => webMonth(y, m, 'babi'),
+  babi_phones: async () => (SNAP.babi || {}).phones || {},
+  babi_auto_status: async () => (SNAP.babi || {}).auto || {},
+  babi_reload: async () => { if (CAN) await sendCmd('babi_reload'); await fetchSnap(); return 0; },
+  babi_set_auto: async on => { await sendCmd('babi_auto', on ? 'on' : 'off');
+    return Object.assign({}, (SNAP.babi || {}).auto, {enabled: on}); },
+  babi_run_now: async key => { await sendCmd('babi_run_now', key); return 'PC 로 보냄 — 30초 안에 시작합니다'; },
+  babi_check_login: async nos => { await sendCmd('babi_check_login', (nos || []).join(',')); return {ok: true}; },
+};
+const API = () => IS_WEB ? webApi : pywebview.api;
+// 지금 고른 앱의 함수: call('month', y, m) → 강남언니는 month, 바비톡은 babi_month
+const call = (name, ...a) => API()[(isBabi() ? 'babi_' : '') + name](...a);
+
 // 로그: 최근 LOG_MAX 줄만 남기고(오래 켜 두면 느려짐), 문제는 빨강·완료는 초록·미리 로그인은 파랑.
 const LOG_MAX = 300;
 const logLines = [];
-let logOnlyBad = false;
+let logOnlyBad = false, logApp = 'all';
 const logKind = s => /!!|실패|오류|못 |안 됨|없음 —|불일치/.test(s) ? 'err'
   : /완료|등록됨|성공|로그인됨|삭제됨/.test(s) ? 'ok'
   : /미리 로그인|시작 시각|자동 실행/.test(s) ? 'info' : '';
 function renderLog() {
   const el = $('log');
   const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 40;   // 위로 올려 읽는 중이면 안 끌어내림
-  const shown = logOnlyBad ? logLines.filter(x => x.kind === 'err') : logLines;
+  // 앱 거르기: 바비톡 로그는 파이썬이 '[바비톡]' 을 앞에 붙여 보냄
+  const shown = logLines.filter(x => (!logOnlyBad || x.kind === 'err') &&
+    (logApp === 'all' || (logApp === 'babi') === x.line.startsWith('[바비톡]')));
   el.innerHTML = shown.length ? shown.map(x => `<div class="ln ${x.kind}"><time>${x.t}</time><span>${esc(x.line)}</span></div>`).join('')
     : `<div class="empty-log">${logOnlyBad ? '문제 기록이 없습니다.' : '아직 기록이 없습니다.'}</div>`;
   const bad = logLines.filter(x => x.kind === 'err').length;
@@ -317,6 +429,11 @@ window.onLog = (line, at) => {
 };
 // 로그는 지우는 버튼을 두지 않습니다 (실수로 눌러 기록이 사라진 적 있음). '문제만' 은 보기만 바꿈.
 $('logOnlyBad').onclick = e => { logOnlyBad = !logOnlyBad; e.currentTarget.setAttribute('aria-pressed', logOnlyBad); renderLog(); };
+$('logApp').querySelectorAll('button').forEach(b => b.onclick = () => {
+  logApp = b.dataset.log;
+  $('logApp').querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', x === b));
+  renderLog();
+});
 renderLog();
 
 function setBusy(text) {
@@ -327,7 +444,7 @@ function setBusy(text) {
 }
 
 async function loadMonth() {
-  M = await pywebview.api.month(view.y, view.m);
+  M = await call('month', view.y, view.m);
   today = new Date(M.today + 'T00:00:00');
 }
 
@@ -335,7 +452,8 @@ function renderTop() {
   // 주차는 파이썬(unni/schedule.py, 월요일 시작)이 계산한 값을 그대로 씁니다.
   const d = today.getDate(), dd = isThisMonth() ? dayData(d) : null;
   $('todayLabel').textContent = `${today.getFullYear()}.${pad(today.getMonth() + 1)}.${pad(d)} (${DAYS[today.getDay()]})`;
-  $('weekLabel').textContent = !dd ? '' : dd.skip ? '6주차 — 오늘은 작업 없음' : `시트 기준 ${dd.week}주차 ${dd.dn}요일`;
+  $('weekLabel').textContent = !dd ? '' : dd.skip ? '6주차 — 오늘은 작업 없음'
+    : (isBabi() ? `${M.parity} 달 · ` : '') + `시트 기준 ${dd.week}주차 ${dd.dn}요일`;
 }
 
 function timeNote(j) {
@@ -363,9 +481,10 @@ function renderJobs() {
     return;
   }
   const isToday = isThisMonth() && sel === today.getDate();
-  $('jobsSub').textContent = `${label} · ${dd.week}주차 ${dd.dn}요일 · ${dd.jobs.length}건${isToday ? ' · 오늘' : ''}`;
+  $('jobsSub').textContent = `${label} · ${isBabi() ? M.parity + ' ' : ''}${dd.week}주차 ${dd.dn}요일 · ${dd.jobs.length}건${isToday ? ' · 오늘' : ''}`;
   $('jobChips').innerHTML = chipsHTML(counts(dd.jobs));
   if (!dd.jobs.length) { el.innerHTML = '<div class="empty">이 날은 작업이 없습니다.</div>'; return; }
+  if (isBabi()) return renderBabiJobs(dd, el);
   // 한 줄 = 시각 | 폰 | 로테 | 수술부위·게시판 | 글 첫 줄 + 3단계 | 업로드 결과(시각·주소·계정) | 상태
   el.innerHTML = dd.jobs.map((j, i) => {
     const first = (j.text || '').split('\n')[0];
@@ -391,8 +510,35 @@ function renderJobs() {
   });
 }
 
+// 바비톡 한 줄 = 시각 | 폰 | 홀/짝 | 수술부위·주제 | 제목 + 본문 첫 줄 + 3단계 | 업로드 시각·계정 | 상태
+function renderBabiJobs(dd, el) {
+  el.innerHTML = dd.jobs.map((j, i) => {
+    const first = (j.text || '').split('\n')[0];
+    const result = j.uploaded
+      ? `<div>${esc(j.uploaded)}</div><div title="${esc(j.account)}">${esc(j.account)}</div>`
+      : `<div title="${esc(j.status)}">${j.busy ? esc(j.busy) + ' 중' : j.note ? esc(j.note)
+          : j.state === '예정' ? (j.plan ? j.plan + ' 시작 예정' : '아직 안 올라감') : esc(j.status) || '기록 없음'}</div>`;
+    return `
+    <button type="button" class="row s-${CLS[j.state]}" data-i="${i}">
+      <span class="t"><b>${j.plan && !j.uploaded ? j.plan : pad(j.hour) + '시'}</b><small>${esc(timeNote(j))}</small></span>
+      <span class="no">${j.board}<small>번</small></span>
+      <span class="par${j.parity === '홀' ? ' odd' : ''}">${esc(j.parity)}</span>
+      <span class="sg"><b>${esc(j.surgery)}</b><small><span class="topic">${esc(j.topic)}</span></small></span>
+      <span class="mid"><span class="tt" title="${esc(j.title)}">${esc(j.title)}</span>
+        <span class="tx sm" title="${esc(j.text)}">${esc(first)}</span>
+        <ol class="pipe mini">${j.steps.map(s => `<li class="${s.s}" title="${esc(s.n)}"><span>${s.k}</span></li>`).join('')}</ol></span>
+      <span class="up">${result}</span>
+      <span class="pill c-${CLS[j.state]}">${j.state}</span>
+    </button>`;
+  }).join('');
+  el.querySelectorAll('.row').forEach(b => b.onclick = () => openJob(dd.jobs[+b.dataset.i], dd));
+}
+
 function renderBoard() {
   const dd = dayData(sel);
+  // 같은 폰보드를 다른 앱이 지금 쓰고 있으면 칸 왼쪽 위에 표시 (겹치면 끝날 때까지 기다림)
+  const other = ((isBabi() ? AUTO_U : AUTO_B) || {}).busy || {};
+  const otherName = isBabi() ? '강언' : '바비';
   const assigned = new Map((dd.skip ? [] : dd.jobs).map(j => [j.board, j]));
   const times = Object.values(PH).map(p => p.at).filter(Boolean).sort();
   $('checked').textContent = times.length ? `마지막 점검 ${times[times.length - 1]}` : '아직 점검 안 함';
@@ -405,26 +551,33 @@ function renderBoard() {
     b.className = `tile ${st}${j ? ' assigned' : ''}`;
     b.title = `${n}번 · ${PHONE[st] || '미점검'}${p.nick ? ' · ' + p.nick : ''}${p.why ? '\n' + p.why : ''}`;
     // 로그인 안 된 칸은 '왜' 를 짧게 (비번 불일치 / VPN 문제 / 인터넷 경로 없음 / USB 끊김 …)
-    b.innerHTML = `<span class="dot"></span><b>${n}</b>
+    const rt = !j ? '-' : isBabi() ? `${j.parity} ${j.hour}시` : `로테${j.rot} ${j.hour}시`;
+    const rc = !j ? 'none' : isBabi() ? 'r4' : 'r' + j.rot;
+    b.innerHTML = `${other[n] ? `<span class="other${isBabi() ? '' : ' b'}" title="${otherName} ${esc(other[n])} 중">${otherName}</span>` : ''}<span class="dot"></span><b>${n}</b>
       <span class="lb">${esc(st === 'in' && p.nick ? p.nick : (p.tag || PHONE[st] || '미점검'))}</span>
-      <span class="rt ${j ? 'r' + j.rot : 'none'}">${j ? `로테${j.rot} ${j.hour}시` : '-'}</span>`;
+      <span class="rt ${rc}">${rt}</span>`;
     b.onclick = () => openPhone(n);
     el.appendChild(b);
   }
   const al = [];
   for (let n = 60; n <= 99; n++) {
-    const p = PH[n]; if (!p) continue;
-    const j = assigned.get(n), when = j ? ` · <b>이날 ${j.hour}시 작업 있음</b>` : '';
-    const why = p.why ? ` — ${esc(p.why)}` : '';
-    if (p.state === 'unknown') al.push(`<div class="alert c-fail"><b>${n}</b> ${esc(p.tag || '판독 불가')}${why}${when}</div>`);
-    if (p.state === 'out') al.push(`<div class="alert ${p.tag === '로그아웃' ? 'c-hold' : 'c-fail'}"><b>${n}</b> ${esc(p.tag || '로그인 안 됨')}${why}${when}</div>`);
-    if (p.state === 'gone') al.push(`<div class="alert c-gone"><b>${n}</b> ${esc(p.tag || '연결 안 됨')}${why}${when}</div>`);
+    const p = PH[n]; if (!p || p.state === 'in') continue;
+    const j = assigned.get(n);
+    const tag = p.tag || {unknown: '판독 불가', out: '로그인 안 됨', gone: '연결 안 됨'}[p.state] || '확인 필요';
+    const cls = p.state === 'gone' ? 'c-gone' : p.state === 'out' && tag === '로그아웃' ? 'c-hold' : 'c-fail';
+    // '인터넷 안 됨 — …', '로그아웃 상태 — …' 처럼 칩과 같은 말로 시작하면 앞부분은 떼고 설명만
+    let why = p.why || '';
+    const cut = why.indexOf(' — ');
+    if (cut > 0 && cut <= 12) why = why.slice(cut + 3);
+    al.push(`<div class="alert ${cls}"><span class="an">${n}</span><span class="at">${esc(tag)}</span>
+      <span class="ad">${esc(why)}${j ? `<span class="aw">이날 ${j.hour}시 작업</span>` : ''}</span></div>`);
   }
   $('alerts').innerHTML = al.join('');
 }
 
 function renderCal() {
-  $('calTitle').textContent = `${view.y}년 ${view.m}월`;
+  $('calTitle').innerHTML = `${view.y}년 ${view.m}월` + (isBabi()
+    ? ` <span class="par${M.parity === '홀' ? ' odd' : ''}" style="vertical-align:middle">${M.parity}</span>` : '');
   let h = WEEK_ORDER.split('').map(x => `<div class="hd${x === '일' ? ' sun' : ''}">${x}</div>`).join('');
   for (let i = 0; i < M.offset; i++) h += '<div class="day blank" aria-hidden="true"></div>';
   const skipped = [], mc = {};
@@ -450,7 +603,7 @@ function renderCal() {
   $('cal').querySelectorAll('button.day').forEach(b => b.onclick = () => {
     sel = +b.dataset.d;
     renderDay();
-    $('jobsPanel').scrollIntoView({behavior: 'smooth', block: 'start'});   // 위 작업 목록으로
+    $('jobs').scrollTop = 0;                         // 작업 목록 칸을 그날 맨 위로
   });
   $('monthChips').innerHTML = chipsHTML(mc);
   $('calNote').textContent = skipped.length ? `6주차에 걸린 ${skipped.join(', ')}일은 시트에 배정이 없어 건너뜁니다.`
@@ -471,6 +624,7 @@ $('scrim').onclick = closeDrawer;
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDrawer(); });
 
 function openJob(j, dd) {
+  if (isBabi()) return openBabiJob(j, dd);
   openDrawer(`
     <div class="dh"><span class="jp">${j.board}</span><span class="rot r${j.rot}">로테 ${j.rot}</span><h3>${esc(j.surgery)}</h3>
       <button class="btn x" type="button">닫기</button></div>
@@ -488,6 +642,32 @@ function openJob(j, dd) {
     <div class="actions" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
       <button class="btn primary" type="button" id="runNow" ${j.busy ? 'disabled' : ''}>지금 실행</button>
       <span class="sub" id="runNote">${j.url ? '지난 글을 지우고 새 글을 올립니다' : '새 글을 올립니다'} · ${j.board}번 · 로테 ${j.rot}</span></div>`);
+  armRunNow(j);
+}
+
+function openBabiJob(j, dd) {
+  openDrawer(`
+    <div class="dh"><span class="jp">${j.board}</span><span class="par${j.parity === '홀' ? ' odd' : ''}">${esc(j.parity)}</span><h3>${esc(j.surgery)}</h3>
+      <button class="btn x" type="button">닫기</button></div>
+    <div><span class="pill c-${CLS[j.state]}">${j.state}</span></div>
+    <dl class="kv"><dt>날짜</dt><dd>${view.m}월 ${dd.day}일 (${dd.dn}) · ${esc(j.parity)} ${dd.week}주차</dd>
+      <dt>실행 시간대</dt><dd>${j.hour}시 안에서 무작위${j.plan ? ` · <b class="num">${j.plan}</b> 시작 예정` : ''}${j.busy ? ` · <b>${esc(j.busy)} 중</b>` : ''}${j.note ? ` · ${esc(j.note)}` : ''}</dd>
+      <dt>게시판 · 주제</dt><dd>성형 · <span class="topic">${esc(j.topic)}</span></dd><dt>시트 행</dt><dd class="num">${j.row}</dd></dl>
+    <div><h4>진행 단계</h4><ol class="steps">${j.steps.map(s => `<li class="${s.s}"><span class="ic">${ICON[s.s]}</span>
+      <div>${s.k}<small>${esc(s.n) || '대기'}</small></div></li>`).join('')}</ol></div>
+    <div><h4>시트 값</h4><table class="sheet">
+      <tr><th>작업 여부</th><td>${esc(j.status) || '—'}</td></tr>
+      <tr><th>최종 업로드</th><td class="num">${esc(j.uploaded) || '—'}</td></tr>
+      <tr><th>업로드 계정</th><td>${esc(j.account) || '—'}</td></tr></table></div>
+    <div><h4>제목 (${j.title.length}자)</h4><pre class="post">${esc(j.title)}</pre></div>
+    <div><h4>게시글 (${j.text.length}자)</h4><pre class="post">${esc(j.text)}</pre></div>
+    <div class="actions" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <button class="btn primary" type="button" id="runNow" ${j.busy ? 'disabled' : ''}>지금 실행</button>
+      <span class="sub" id="runNote">이 계정의 지난 글(시트 제목이 같은 글)을 지우고 새 글을 올립니다 · ${j.board}번</span></div>`);
+  armRunNow(j);
+}
+
+function armRunNow(j) {
   const b = $('runNow');
   let armed = false;
   b.onclick = async () => {
@@ -499,7 +679,7 @@ function openJob(j, dd) {
       return;
     }
     b.disabled = true;
-    const r = await pywebview.api.run_now(j.key);
+    const r = await call('run_now', j.key);
     $('runNote').textContent = r;
     onAuto();
   };
@@ -510,13 +690,14 @@ function openPhone(n) {
   const hist = [];
   M.days.forEach(dd => dd.jobs.forEach(j => { if (j.board === n) hist.push({dd, j}); }));
   openDrawer(`
-    <div class="dh"><span class="jp">${n}</span><h3>폰보드</h3><button class="btn x" type="button">닫기</button></div>
+    <div class="dh"><span class="jp">${n}</span><h3>폰보드 · ${APP_NAME[APP]}</h3><button class="btn x" type="button">닫기</button></div>
     <div><span class="chip c-${{in: 'ok', out: 'hold', unknown: 'fail', gone: 'gone'}[st] || 'none'}">${PHONE[st] || '미점검'}</span>
       ${p.nick ? `<span class="sub" style="margin-left:8px">${esc(p.nick)}</span>` : ''}</div>
     <dl class="kv"><dt>마지막 점검</dt><dd class="num">${esc(p.at) || '없음'}</dd>
       ${p.why ? `<dt>안 되는 이유</dt><dd><b>${esc(p.tag || '')}</b> — ${esc(p.why)}</dd>` : ''}</dl>
     <div><h4>${view.y}년 ${view.m}월 작업 ${hist.length}건</h4><div class="hist">${hist.map(({dd, j}) => `
-      <div class="h"><span class="num">${view.m}/${dd.day} ${dd.dn}</span><span class="rot r${j.rot}">로테 ${j.rot}</span>
+      <div class="h"><span class="num">${view.m}/${dd.day} ${dd.dn}</span>${isBabi()
+        ? `<span class="par${j.parity === '홀' ? ' odd' : ''}">${esc(j.parity)}</span>` : `<span class="rot r${j.rot}">로테 ${j.rot}</span>`}
       <span>${esc(j.surgery)} <span class="sub">· ${j.hour}시</span></span><span class="chip c-${CLS[j.state]}">${j.state}</span></div>`).join('') || '<span class="sub">이번 달 작업 없음</span>'}</div></div>
     <div><button class="btn primary" type="button" data-check="${n}" ${busy ? 'disabled' : ''}>이 폰만 로그인 점검</button></div>`);
   $('drawer').querySelector('[data-check]').onclick = () => checkLogin([n]);
@@ -526,8 +707,8 @@ async function checkLogin(nos) {
   if (busy) return;
   setBusy(`로그인 점검 중… (${nos.length}대)`);
   try {
-    await pywebview.api.check_login(nos);
-    PH = await pywebview.api.phones();
+    await call('check_login', nos);
+    PH = await call('phones');
     renderBoard();
     if (!$('drawer').hidden && nos.length === 1) openPhone(nos[0]);
   } finally { setBusy(''); }
@@ -548,7 +729,7 @@ $('reloadBtn').onclick = async () => {
   if (busy) return;
   setBusy('시트 읽는 중…');
   try {
-    await pywebview.api.reload(); lastSheetRead = Date.now();
+    await call('reload'); lastSheetRead = Date.now();
     await loadMonth(); renderTop(); renderDay();
   } finally { setBusy(''); }
 };
@@ -559,14 +740,18 @@ $('reloadBtn').onclick = async () => {
 const ymd = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 let lastSheetRead = Date.now();
 async function tick() {
-  if (busy || !today) return;
+  if (IS_WEB || busy || !today) return;          // 웹앱은 webRefresh 가 대신함
   try { await refreshAuto(); } catch (e) { /* 다음 분에 다시 */ }
+  try {                                           // 폰보드는 매분 (작업 중 로그인 결과·웹에서 보낸 점검도 바로 보이게)
+    const ph = await call('phones');
+    if (JSON.stringify(ph) !== JSON.stringify(PH)) { PH = ph; renderBoard(); }
+  } catch (e) { /* 다음 분에 다시 */ }
   const now = new Date();
   const dayChanged = ymd(now) !== ymd(today);
   const sheetDue = Date.now() - lastSheetRead > 5 * 60 * 1000;
   if (!dayChanged && !sheetDue) return;
   try {
-    if (sheetDue) { await pywebview.api.reload(); lastSheetRead = Date.now(); }
+    if (sheetDue) { await call('reload'); lastSheetRead = Date.now(); }
     if (dayChanged) {
       const wasOnToday = isThisMonth() && sel === today.getDate();
       if (wasOnToday || isThisMonth()) view = {y: now.getFullYear(), m: now.getMonth() + 1};
@@ -576,7 +761,7 @@ async function tick() {
     } else {
       await loadMonth();
     }
-    PH = await pywebview.api.phones();
+    PH = await call('phones');
     renderTop(); renderDay();
   } catch (e) { onLog('자동 새로고침 실패: ' + e); }
 }
@@ -592,12 +777,41 @@ function renderAuto() {
   b.classList.toggle('on', AUTO.enabled && AUTO.today_in_window);
   b.classList.toggle('off-window', AUTO.enabled && !AUTO.today_in_window);
   const busyN = Object.keys(AUTO.busy || {}).length;
-  $('autoText').textContent = (AUTO.enabled ? (AUTO.today_in_window ? '자동 실행 켜짐' : '자동 실행 켜짐 (오늘은 기간 밖)')
+  $('autoText').textContent = APP_NAME[APP] + ' ' + (AUTO.enabled ? (AUTO.today_in_window ? '자동 실행 켜짐' : '자동 실행 켜짐 (오늘은 기간 밖)')
     : '자동 실행 꺼짐') + range + (busyN ? ` · 진행 ${busyN}대` : '');
+  renderAppTabs();
 }
-async function refreshAuto() { AUTO = await pywebview.api.auto_status(); renderAuto(); }
+// 두 앱 상태를 같이 읽음 — 탭 숫자(오늘 건수)와 '다른 앱이 쓰는 폰' 표시에 씀
+async function refreshAuto() {
+  [AUTO_U, AUTO_B] = await Promise.all([API().auto_status(), API().babi_auto_status()]);
+  AUTO = isBabi() ? AUTO_B : AUTO_U;
+  renderAuto();
+}
+function renderAppTabs() {
+  document.querySelectorAll('.apptabs button').forEach(b => b.setAttribute('aria-selected', b.dataset.app === APP));
+  const n = a => !a ? '' : a.count != null ? a.count : a.planned ? Object.keys(a.planned).length : '';
+  $('cntUnni').textContent = n(AUTO_U);
+  $('cntBabi').textContent = n(AUTO_B);
+}
+async function switchApp(app) {
+  if (app === APP || busy) return;
+  APP = app;
+  try { localStorage.setItem('app', app); } catch (e) { /* 저장 못 해도 동작 */ }
+  closeDrawer();
+  AUTO = isBabi() ? AUTO_B : AUTO_U;
+  renderAuto();
+  try {
+    PH = await call('phones');
+    await loadMonth();
+    if (!isThisMonth()) sel = Math.min(sel, M.days.length);
+    renderTop(); renderDay();
+  } catch (e) { onLog(`${APP_NAME[app]} 화면을 못 불러옴: ${e && e.message || e}`); }
+}
+document.querySelectorAll('.apptabs button').forEach(b => b.onclick = () => switchApp(b.dataset.app));
 $('autoBtn').onclick = async () => {
-  AUTO = await pywebview.api.set_auto(!(AUTO && AUTO.enabled));
+  if (!CAN) return;
+  AUTO = await call('set_auto', !(AUTO && AUTO.enabled));
+  if (isBabi()) AUTO_B = AUTO; else AUTO_U = AUTO;
   renderAuto();
 };
 // 파이썬 스케줄러가 작업 시작/끝, 미리 로그인을 알릴 때
@@ -607,31 +821,68 @@ window.onAuto = () => {
   autoTimer = setTimeout(async () => {
     try {
       await refreshAuto();
-      await pywebview.api.reload(true); lastSheetRead = Date.now();
+      await call('reload', true); lastSheetRead = Date.now();
       await loadMonth();
-      PH = await pywebview.api.phones();
+      PH = await call('phones');
       renderDay();
     } catch (e) { onLog('화면 갱신 실패: ' + e); }
   }, 800);
 };
 
-window.addEventListener('pywebviewready', async () => {
+async function boot() {
   try {
-    const now = new Date();
-    $('ver').textContent = 'v' + await pywebview.api.version();
+    if (IS_WEB) {
+      await fetchSnap();
+      try { CAN = (await gs('dashWho')).control; } catch (e) { CAN = true; }   // 예전 Dash.gs(주인만 열림)엔 dashWho 가 없음
+      document.body.classList.toggle('readonly', !CAN);
+    }
+    const now = IS_WEB ? new Date(SNAP.today + 'T00:00:00') : new Date();
+    $('ver').textContent = 'v' + await API().version() + (IS_WEB ? ' · 웹' : '');
     // 다시 켰을 때 파이썬이 들고 있던 최근 로그부터 보여 줌
-    for (const [at, line] of await pywebview.api.logs()) onLog(line, at);
-    PH = await pywebview.api.phones();
+    for (const [at, line] of await API().logs()) onLog(line, at);
+    PH = await call('phones');
     view = {y: now.getFullYear(), m: now.getMonth() + 1};
     await loadMonth();
     sel = today.getDate();
     renderTop(); renderDay();
     await refreshAuto();
+    renderSync();
     $('loading').hidden = true;
   } catch (e) {
-    $('loading').textContent = '시트를 읽지 못했습니다: ' + e;
+    $('loading').textContent = (IS_WEB ? '' : '시트를 읽지 못했습니다: ') + (e && e.message || e);
   }
-});
+}
+
+// 웹앱: 30초마다 PC 가 보낸 새 값이 있으면 다시 그림. 위쪽에 'PC 기준 시각' 과 끊김 경고.
+function renderSync() {
+  if (!IS_WEB || !SNAP) return;
+  const sent = new Date(SNAP.sent_at.replace(' ', 'T'));
+  const min = Math.round((Date.now() - sent.getTime()) / 60000);
+  const el = $('sync');
+  el.hidden = false;
+  el.textContent = (CAN ? '' : '보기 전용 · ') + `PC 기준 ${SNAP.sent_at.slice(11, 16)}` + (min > 6 ? ` · ${min}분째 소식 없음 — PC 확인` : '');
+  el.classList.toggle('stale', min > 6);
+}
+async function webRefresh() {
+  if (!$('loading').hidden) return boot();         // 처음 열 때 PC 값이 아직 없었으면 다시 시도
+  try {
+    const before = SNAP && SNAP.sent_at;
+    await fetchSnap();
+    if (SNAP.sent_at !== before) {
+      logLines.length = 0;
+      for (const [at, line] of SNAP.logs) onLog(line, at);
+      PH = await call('phones');
+      AUTO_U = SNAP.auto; AUTO_B = (SNAP.babi || {}).auto || null;
+      AUTO = isBabi() ? AUTO_B : AUTO_U;
+      today = new Date(SNAP.today + 'T00:00:00');
+      await loadMonth(); renderTop(); renderDay(); renderAuto();
+    }
+  } catch (e) { /* 다음 번에 다시 */ }
+  renderSync();
+}
+
+if (IS_WEB) { boot(); setInterval(webRefresh, 30 * 1000); }
+else window.addEventListener('pywebviewready', boot);
 </script>
 </body>
 </html>

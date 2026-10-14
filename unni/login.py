@@ -426,7 +426,34 @@ def switch(board, dev, account: dict, log=print) -> str:
     결과는 login_attempts.json 에 남겨 대시보드가 '왜 로그인이 안 되는지' 보여 줍니다."""
     result = _switch(board, dev, account, log)
     _record_attempt(dev.no, account["id"], result)
+    _record_state(dev.no, account["id"], result)
     return result
+
+
+STATE = ROOT / "login_state.json"          # 대시보드 폰보드 칸 (dashboard.load_state 와 같은 파일)
+_STATE_LOCK = threading.Lock()
+
+
+def _record_state(no: int, account_id: str, result: str):
+    """작업 중 로그인 결과를 폰보드 칸에 바로 반영 ('로그인 점검' 을 다시 누르지 않아도)."""
+    from datetime import datetime
+    at = datetime.now().strftime("%Y-%m-%d %H:%M")
+    if result == "ok" or result.startswith("skip"):
+        entry = {"state": "in", "nick": known_nicks().get(account_id, ""), "at": at}
+    else:
+        entry = {"state": "out", "nick": "", "at": at,
+                 "why": f"마지막 로그인 실패: {result[5:].strip()} ({at}, {mask(account_id)})"}
+    with _STATE_LOCK:
+        try:
+            data = json.loads(STATE.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            data = {}
+        data[str(no)] = entry
+        try:
+            STATE.write_text(json.dumps(dict(sorted(data.items(), key=lambda kv: int(kv[0]))),
+                                        ensure_ascii=False, indent=1), encoding="utf-8")
+        except OSError:
+            pass
 
 
 def _switch(board, dev, account: dict, log=print) -> str:

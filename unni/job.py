@@ -104,8 +104,11 @@ def _run(match, label, delete_old, log) -> dict:
         # 작업이 끝나면(성공·실패 모두) 그 폰의 크롬 탭을 모두 닫습니다 — 탭이 계속 쌓여서
         # (사용자 요청 2026-10-10). 로그인은 쿠키라 탭을 닫아도 풀리지 않습니다.
         try:
-            chrome.close_all_tabs(board, devs)
-            log(f"  {job.board}번 크롬 탭 정리")
+            left = chrome.close_all_tabs(board, devs)
+            if left.get(job.board):
+                log(f"!! {job.board}번 크롬 탭이 안 줄어듦 ({left[job.board]}개 남음) — 크롬에서 직접 정리 필요")
+            else:
+                log(f"  {job.board}번 크롬 탭 정리 (확인됨)")
         except Exception as exc:                     # noqa: BLE001 — 탭 정리 실패는 결과에 영향 없음
             log(f"  {job.board}번 탭 정리 실패: {exc}")
 
