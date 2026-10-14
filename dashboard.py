@@ -483,6 +483,12 @@ def main():
         raise SystemExit(f"화면 파일이 없습니다: {UI}")
     if not _single_instance():
         return
+    try:
+        # 작업 표시줄에서 '파이썬' 이 아니라 이 프로그램으로 따로 묶이고, 창 아이콘(ui/dashboard.ico)이 보이게
+        import ctypes
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("gangeon.babitalk.dashboard")
+    except (AttributeError, OSError):
+        pass
     api = Api()
     # 글 주소(target=_blank)는 대시보드 창이 아니라 PC 기본 브라우저로 엽니다.
     webview.settings["OPEN_EXTERNAL_LINKS_IN_BROWSER"] = True
@@ -494,7 +500,8 @@ def main():
     api._bsched.start()           # 바비톡도 같은 방식 (처음엔 꺼짐)
     api._remote = Remote(api, api._log)
     api._remote.start()           # 웹앱 연동: 값 보내기 + 웹앱 명령 받기
-    webview.start()
+    icon = ROOT / "ui" / "dashboard.ico"         # 바로가기 3개(바탕화면·시작 프로그램·폴더)도 같은 파일
+    webview.start(icon=str(icon) if icon.is_file() else None)
 
 
 if __name__ == "__main__":
