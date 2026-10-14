@@ -31,7 +31,7 @@ import webview
 
 from core.board import ROOT, load_settings
 from core.board import Board
-from unni import job, login, schedule
+from unni import job, login, notify, schedule
 from unni.login import run_state
 from unni.remote import Remote
 from unni.scheduler import Scheduler
@@ -502,6 +502,12 @@ def main():
     api._remote.start()           # 웹앱 연동: 값 보내기 + 웹앱 명령 받기
     icon = ROOT / "ui" / "dashboard.ico"         # 바로가기 3개(바탕화면·시작 프로그램·폴더)도 같은 파일
     webview.start(icon=str(icon) if icon.is_file() else None)
+    # 창을 닫으면(직접 닫기·Windows 종료) 바로 텔레그램 — 강제 종료·정전처럼 이 코드까지 못 오는 경우는
+    # 시트 Apps Script(Watch.gs)가 생존 신호(M1)가 15분 끊긴 것을 보고 메일·텔레그램으로 알림.
+    working = sorted({**api._sched.busy, **api._bsched.busy}.items())
+    api._log("대시보드 꺼짐" + (f" — 진행 중이던 작업: {working}" if working else ""))
+    notify.telegram(f"⏹ 대시보드 꺼짐 ({datetime.now():%m/%d %H:%M})\n자동 실행이 멈춥니다. 다시 켜려면 바탕화면 '강언·바비톡 대시보드'."
+                    + (f"\n⚠️ 진행 중이던 작업: {', '.join(f'{n}번 {w}' for n, w in working)}" if working else ""))
 
 
 if __name__ == "__main__":
