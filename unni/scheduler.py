@@ -33,6 +33,7 @@ MAX_MINUTE = 40                 # 시간대 안에서 시작 분 범위 0~40 (�
 PREP_LEAD = timedelta(minutes=10)
 BEAT_EVERY = 300                # 생존 신호 간격(초)
 SHEET_EVERY = 600               # 시트 다시 읽는 간격(초) — 실행 직전에는 따로 다시 읽음
+PREP_DAYS = 2                   # 미리 로그인 범위: 오늘·내일·모레 (2026-10-15 요청, 전엔 내일까지)
 MAX_PREP = 3                    # 미리 로그인 동시에 몇 대까지
 BEAT_CELL = "M1"
 
@@ -196,7 +197,7 @@ class Scheduler:
                 if r.get("ok"):
                     self._notify_success(j, d, r)
                 else:
-                    # 실패도 메일로 (2026-10-13 요청) — '강언업로드이력' 탭에도 한 줄 남아 이력이 됨
+                    # 실패도 메일로 (2026-10-13 요청) — '업로드이력' 탭에도 한 줄 남아 이력이 됨
                     notify.both_async("⚠️ 업로드 실패",
                                       f"{d:%m/%d}({schedule.day_of(d)}) {where}\n이유: {r.get('error', '')}")
             except Exception as exc:                 # noqa: BLE001
@@ -261,9 +262,10 @@ class Scheduler:
     # -- 미리 로그인 ------------------------------------------------------------------
 
     def _prepare(self, now: datetime, rows):
-        """오늘·내일(기간 안) 남은 작업 중 폰별 가장 가까운 것의 계정으로 미리 로그인."""
+        """오늘~PREP_DAYS일 뒤(기간 안) 남은 작업 중 폰별 가장 가까운 것의 계정으로 미리 로그인.
+        이틀 전부터 해 두면 로그인 문제(비번 불일치 등)를 작업 전에 미리 알고 고칠 수 있음."""
         upcoming: dict[int, tuple[datetime, schedule.Job]] = {}
-        for offset in (0, 1):
+        for offset in range(PREP_DAYS + 1):
             d = now.date() + timedelta(days=offset)
             if not self.in_window(d):
                 continue

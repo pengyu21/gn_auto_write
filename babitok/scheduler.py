@@ -88,7 +88,7 @@ class BabiScheduler:
                 "until": u.isoformat() if u else None, "today_in_window": self.in_window(today),
                 "busy": {str(k): v for k, v in self.busy.items()},
                 "planned": self.planned(today), "done": self.done_keys(today),
-                "parity": schedule.parity_of(today), "count": self._count(today)}
+                "count": self._count(today)}
 
     def _count(self, d: date) -> int:
         """오늘 건수 (탭 옆 숫자) — 자동 실행이 꺼져 있어도 시트 기준으로."""
@@ -226,7 +226,27 @@ class BabiScheduler:
             self._header = v[0] if v else []
             self._rows = schedule.load_rows(values=v)
             self._rows_at = time.time()
+            self._check_clash()
         return self._rows
+
+    def _check_clash(self):
+        """같은 폰이 같은 주차·요일에 강남언니와 2시간 안쪽이면 로그에 경고 (2026-10-15 요청 —
+        두 시트 다 주차·요일로 날짜가 정해져 달과 상관없이 미리 알 수 있음). 같은 경고는 한 번만."""
+        if not self.other:
+            return
+        try:
+            krows = self.other._load_rows()
+        except Exception:                            # noqa: BLE001
+            return
+        kset: dict[tuple, set] = {}
+        for j in krows:
+            kset.setdefault((j.week, j.day), set()).add((j.board, j.hour))
+        clash = sorted({(j.week, j.day, j.board, j.hour, hh) for j in self._rows
+                        for bb, hh in kset.get((j.week, j.day), ()) if bb == j.board and abs(hh - j.hour) < 2})
+        msg = ", ".join(f"{w}주 {d} {no}번 바비톡 {h}시/강남언니 {kh}시" for w, d, no, h, kh in clash)
+        if clash and msg != getattr(self, "_clash_msg", ""):
+            self.log(f"!! 강남언니와 같은 폰 시간이 2시간 안쪽 (시트 작업시간 조정 필요): {msg}")
+        self._clash_msg = msg
 
     def _make_plan(self, d: date, jobs) -> dict[str, str]:
         day = self._plan.setdefault("days", {}).setdefault(d.isoformat(), {})

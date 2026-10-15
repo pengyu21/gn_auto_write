@@ -298,7 +298,8 @@ class Api:
                          "skip": jobs is None,
                          "jobs": [self._bjob(j, d, today, plan, done) for j in (jobs or [])]})
         return {"year": year, "month": month, "today": today.isoformat(),
-                "parity": bschedule.parity_of(date(year, month, 1)),
+                # 홀/짝 열이 있을 때만 (2026-10-15 없앰)
+                "parity": bschedule.parity_of(date(year, month, 1)) if any(j.parity for j in rows) else "",
                 "offset": bschedule.first_offset(year, month), "days": days}
 
     def babi_phones(self) -> dict:

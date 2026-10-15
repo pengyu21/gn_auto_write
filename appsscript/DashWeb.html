@@ -453,7 +453,7 @@ function renderTop() {
   const d = today.getDate(), dd = isThisMonth() ? dayData(d) : null;
   $('todayLabel').textContent = `${today.getFullYear()}.${pad(today.getMonth() + 1)}.${pad(d)} (${DAYS[today.getDay()]})`;
   $('weekLabel').textContent = !dd ? '' : dd.skip ? '6주차 — 오늘은 작업 없음'
-    : (isBabi() ? `${M.parity} 달 · ` : '') + `시트 기준 ${dd.week}주차 ${dd.dn}요일`;
+    : (isBabi() && M.parity ? `${M.parity} 달 · ` : '') + `시트 기준 ${dd.week}주차 ${dd.dn}요일`;
 }
 
 function timeNote(j) {
@@ -481,7 +481,7 @@ function renderJobs() {
     return;
   }
   const isToday = isThisMonth() && sel === today.getDate();
-  $('jobsSub').textContent = `${label} · ${isBabi() ? M.parity + ' ' : ''}${dd.week}주차 ${dd.dn}요일 · ${dd.jobs.length}건${isToday ? ' · 오늘' : ''}`;
+  $('jobsSub').textContent = `${label} · ${isBabi() && M.parity ? M.parity + ' ' : ''}${dd.week}주차 ${dd.dn}요일 · ${dd.jobs.length}건${isToday ? ' · 오늘' : ''}`;
   $('jobChips').innerHTML = chipsHTML(counts(dd.jobs));
   if (!dd.jobs.length) { el.innerHTML = '<div class="empty">이 날은 작업이 없습니다.</div>'; return; }
   if (isBabi()) return renderBabiJobs(dd, el);
@@ -522,7 +522,7 @@ function renderBabiJobs(dd, el) {
     <button type="button" class="row s-${CLS[j.state]}" data-i="${i}">
       <span class="t"><b>${j.plan && !j.uploaded ? j.plan : pad(j.hour) + '시'}</b><small>${esc(timeNote(j))}</small></span>
       <span class="no">${j.board}<small>번</small></span>
-      <span class="par${j.parity === '홀' ? ' odd' : ''}">${esc(j.parity)}</span>
+      <span>${j.parity ? `<span class="par${j.parity === '홀' ? ' odd' : ''}">${esc(j.parity)}</span>` : ''}</span>
       <span class="sg"><b>${esc(j.surgery)}</b><small><span class="topic">${esc(j.topic)}</span></small></span>
       <span class="mid"><span class="tt" title="${esc(j.title)}">${esc(j.title)}</span>
         <span class="tx sm" title="${esc(j.text)}">${esc(first)}</span>
@@ -551,7 +551,7 @@ function renderBoard() {
     b.className = `tile ${st}${j ? ' assigned' : ''}`;
     b.title = `${n}번 · ${PHONE[st] || '미점검'}${p.nick ? ' · ' + p.nick : ''}${p.why ? '\n' + p.why : ''}`;
     // 로그인 안 된 칸은 '왜' 를 짧게 (비번 불일치 / VPN 문제 / 인터넷 경로 없음 / USB 끊김 …)
-    const rt = !j ? '-' : isBabi() ? `${j.parity} ${j.hour}시` : `로테${j.rot} ${j.hour}시`;
+    const rt = !j ? '-' : isBabi() ? `${j.parity ? j.parity + ' ' : ''}${j.hour}시` : `로테${j.rot} ${j.hour}시`;
     const rc = !j ? 'none' : isBabi() ? 'r4' : 'r' + j.rot;
     b.innerHTML = `${other[n] ? `<span class="other${isBabi() ? '' : ' b'}" title="${otherName} ${esc(other[n])} 중">${otherName}</span>` : ''}<span class="dot"></span><b>${n}</b>
       <span class="lb">${esc(st === 'in' && p.nick ? p.nick : (p.tag || PHONE[st] || '미점검'))}</span>
@@ -576,7 +576,7 @@ function renderBoard() {
 }
 
 function renderCal() {
-  $('calTitle').innerHTML = `${view.y}년 ${view.m}월` + (isBabi()
+  $('calTitle').innerHTML = `${view.y}년 ${view.m}월` + (isBabi() && M.parity
     ? ` <span class="par${M.parity === '홀' ? ' odd' : ''}" style="vertical-align:middle">${M.parity}</span>` : '');
   let h = WEEK_ORDER.split('').map(x => `<div class="hd${x === '일' ? ' sun' : ''}">${x}</div>`).join('');
   for (let i = 0; i < M.offset; i++) h += '<div class="day blank" aria-hidden="true"></div>';
@@ -647,10 +647,10 @@ function openJob(j, dd) {
 
 function openBabiJob(j, dd) {
   openDrawer(`
-    <div class="dh"><span class="jp">${j.board}</span><span class="par${j.parity === '홀' ? ' odd' : ''}">${esc(j.parity)}</span><h3>${esc(j.surgery)}</h3>
+    <div class="dh"><span class="jp">${j.board}</span>${j.parity ? `<span class="par${j.parity === '홀' ? ' odd' : ''}">${esc(j.parity)}</span>` : ''}<h3>${esc(j.surgery)}</h3>
       <button class="btn x" type="button">닫기</button></div>
     <div><span class="pill c-${CLS[j.state]}">${j.state}</span></div>
-    <dl class="kv"><dt>날짜</dt><dd>${view.m}월 ${dd.day}일 (${dd.dn}) · ${esc(j.parity)} ${dd.week}주차</dd>
+    <dl class="kv"><dt>날짜</dt><dd>${view.m}월 ${dd.day}일 (${dd.dn}) · ${j.parity ? esc(j.parity) + ' ' : ''}${dd.week}주차</dd>
       <dt>실행 시간대</dt><dd>${j.hour}시 안에서 무작위${j.plan ? ` · <b class="num">${j.plan}</b> 시작 예정` : ''}${j.busy ? ` · <b>${esc(j.busy)} 중</b>` : ''}${j.note ? ` · ${esc(j.note)}` : ''}</dd>
       <dt>게시판 · 주제</dt><dd>성형 · <span class="topic">${esc(j.topic)}</span></dd><dt>시트 행</dt><dd class="num">${j.row}</dd></dl>
     <div><h4>진행 단계</h4><ol class="steps">${j.steps.map(s => `<li class="${s.s}"><span class="ic">${ICON[s.s]}</span>
@@ -697,7 +697,7 @@ function openPhone(n) {
       ${p.why ? `<dt>안 되는 이유</dt><dd><b>${esc(p.tag || '')}</b> — ${esc(p.why)}</dd>` : ''}</dl>
     <div><h4>${view.y}년 ${view.m}월 작업 ${hist.length}건</h4><div class="hist">${hist.map(({dd, j}) => `
       <div class="h"><span class="num">${view.m}/${dd.day} ${dd.dn}</span>${isBabi()
-        ? `<span class="par${j.parity === '홀' ? ' odd' : ''}">${esc(j.parity)}</span>` : `<span class="rot r${j.rot}">로테 ${j.rot}</span>`}
+        ? (j.parity ? `<span class="par${j.parity === '홀' ? ' odd' : ''}">${esc(j.parity)}</span>` : '<span></span>') : `<span class="rot r${j.rot}">로테 ${j.rot}</span>`}
       <span>${esc(j.surgery)} <span class="sub">· ${j.hour}시</span></span><span class="chip c-${CLS[j.state]}">${j.state}</span></div>`).join('') || '<span class="sub">이번 달 작업 없음</span>'}</div></div>
     <div><button class="btn primary" type="button" data-check="${n}" ${busy ? 'disabled' : ''}>이 폰만 로그인 점검</button></div>`);
   $('drawer').querySelector('[data-check]').onclick = () => checkLogin([n]);

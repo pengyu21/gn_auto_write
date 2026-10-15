@@ -27,6 +27,8 @@ COLUMNS = {
     "status": ["작업 여부"], "uploaded": ["최종 업로드 날짜"], "account": ["업로드 계정"],
 }
 STEPS = ["로그인 확인", "지난 글 삭제", "새 글 업로드"]
+# 홀/짝 달 열은 없어도 됨 (2026-10-15 홀/짝 없애고 매주 40계정 1번씩으로 바꿈). 있으면 그 달만.
+OPTIONAL = {"parity"}
 
 
 @dataclass
@@ -69,7 +71,7 @@ def key_of(j: Job) -> str:
 def next_turn(week: int, parity: str, day: str, d: date) -> date:
     for k in range(1, 130):
         x = d + timedelta(days=k)
-        if parity_of(x) == parity and week_of(x) == week and day_of(x) == day:
+        if parity in ("", parity_of(x)) and week_of(x) == week and day_of(x) == day:
             return x
     return d + timedelta(days=130)
 
@@ -81,7 +83,7 @@ def columns(header: list[str]) -> dict[str, int]:
             if str(h).strip() in names:
                 found[key] = i
                 break
-    missing = [COLUMNS[k][0] for k in COLUMNS if k not in found]
+    missing = [COLUMNS[k][0] for k in COLUMNS if k not in found and k not in OPTIONAL]
     if missing:
         raise RuntimeError(f"시트 '{TAB}' 머리글에 없는 열: {', '.join(missing)}")
     return found
@@ -105,7 +107,7 @@ def load_rows(sheet: Optional[Sheet] = None, values=None) -> list[Job]:
             hour = int(re.sub(r"\D", "", g("time")))
         except ValueError:
             continue
-        out.append(Job(row=i, week=week, parity=g("parity"), day=g("day"), hour=hour, board=board,
+        out.append(Job(row=i, week=week, parity=g("parity") if "parity" in c else "", day=g("day"), hour=hour, board=board,
                        surgery=g("surgery"), title=g("title"), text=str(r[c["text"]]), topic=g("topic"),
                        status=g("status"), uploaded=g("uploaded"), account=g("account")))
     return out
@@ -117,7 +119,7 @@ def jobs_on(rows: list[Job], d: date) -> Optional[list[Job]]:
     if w > 5:
         return None
     par, dn = parity_of(d), day_of(d)
-    return sorted((j for j in rows if j.week == w and j.day == dn and j.parity == par),
+    return sorted((j for j in rows if j.week == w and j.day == dn and j.parity in ("", par)),
                   key=lambda j: (j.hour, j.board))
 
 

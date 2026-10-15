@@ -4,7 +4,7 @@
  *
  * 대시보드는 5분마다 '강언게시글로테이션' 탭 M1 에 'yyyy-MM-dd HH:mm' 을 적습니다.
  * 이 스크립트가 5분마다 그 시각을 보고, 15분 넘게 그대로면 메일 + 텔레그램을 보냅니다.
- * 또 프로그램이 '강언업로드이력' 탭에 적어 둔 업로드 완료·실패를 메일로 보냅니다 (텔레그램은 프로그램이 직접).
+ * 또 프로그램이 '업로드이력' 탭에 적어 둔 업로드 완료·실패를 메일로 보냅니다 (텔레그램은 프로그램이 직접).
  * 구글 서버에서 돌아서 PC 가 꺼져도, 인터넷이 끊겨도 알림이 옵니다.
  * 멈춘 동안은 1시간마다 다시 알리고, 다시 돌기 시작하면 '복구' 알림을 한 번 보냅니다.
  *
@@ -21,7 +21,7 @@ const WATCH_CELL = 'M1';
 const WATCH_STALE_MIN = 15;     // 이 시간 넘게 신호가 없으면 멈춘 것으로 봄
 const WATCH_REPEAT_MIN = 60;    // 멈춘 동안 다시 알리는 간격
 const WATCH_EVERY_MIN = 5;      // 확인 간격 (트리거) — 바꾸면 installWatch 를 다시 실행
-const WATCH_MAIL_TAB = '강언업로드이력';  // 프로그램이 업로드 완료를 적어 두면 여기서 메일로 보냄 (unni/notify.py MAIL_TAB 과 같은 이름)
+const WATCH_MAIL_TAB = '업로드이력';  // 강남언니·바비톡 업로드 완료·실패를 프로그램이 적어 두면 여기서 메일로 보냄 (unni/notify.py MAIL_TAB 과 같은 이름)
 const WATCH_MAIL_KEEP = 500;    // 업로드 이력 탭에 남길 줄 수
 
 /** 트리거가 부릅니다: 보낼 메일 처리 + 멈춤 확인. */
@@ -63,7 +63,7 @@ function installWatch() {
     '업로드 완료 메일은 \'' + WATCH_MAIL_TAB + '\' 탭을 거쳐 ' + WATCH_EVERY_MIN + '분 안에 옵니다.');
 }
 
-/** '강언업로드이력' 탭 (없으면 만듦): A 시각, B 제목, C 내용, D 메일 보냄 */
+/** '업로드이력' 탭 (없으면 만듦): A 시각, B 제목, C 내용, D 메일 보냄 */
 function watchMailTab_() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   let sh = ss.getSheetByName(WATCH_MAIL_TAB);
