@@ -61,7 +61,7 @@ def save_state(state: dict[int, dict]):
 
 def _tag(why: str) -> str:
     """긴 이유 -> 폰보드 칸에 들어갈 짧은 말."""
-    for key, short in (("비밀번호 불일치", "비번 불일치"), ("로그인 화면에 머묾", "로그인 막힘"),
+    for key, short in (("본인인증", "본인인증 필요"), ("비밀번호 불일치", "비번 불일치"), ("로그인 화면에 머묾", "로그인 막힘"),
                        ("VPN", "VPN 문제"), ("경로 없음", "인터넷 없음"), ("Wi-Fi 연결 안 됨", "Wi-Fi 끊김"),
                        ("비행기", "비행기 모드"), ("바깥 접속", "인터넷 안 됨"), ("USB", "USB 끊김"),
                        ("못 읽음", "화면 못 읽음"), ("로그아웃 상태", "로그아웃")):
@@ -99,6 +99,9 @@ def babi_steps(j: bschedule.Job, state: str) -> list[dict]:
     if state in ("성공", "완료"):
         return [s("로그인 확인", "ok"), s("지난 글 삭제", "ok", "지난 글 정리됨 (또는 없었음)"),
                 s("새 글 업로드", "ok", "등록")]
+    if "본인인증" in j.status and state == "보류":
+        return [s("로그인 확인", "hold", "휴대폰 본인 인증 창 — 그 폰에서 직접 인증 필요"),
+                s("지난 글 삭제", "skip", "건너뜀 (지난 글은 그대로 둠)"), s("새 글 업로드", "skip", "건너뜀")]
     if state in ("실패", "보류"):
         why = j.status.split(":", 1)[1].strip() if ":" in j.status else j.status
         if "지난 글 삭제" in j.status:
@@ -380,6 +383,9 @@ class Api:
         excluded = self._bsched.is_skipped(j)
         if state == "예정" and d == today and datetime.now().hour > j.hour:
             state, skipped = "미실행", True             # 자동 실행이 꺼져 있어도 지난 시간대는 지난 것으로
+        verify = "본인인증" in j.status or "본인인증" in mark
+        if verify and state in ("예정", "미실행") and (d == today or j.status.startswith("건너뜀: 본인인증")):
+            state, skipped = "보류", False                # 본인인증 창 때문에 건너뜀 — 폰에서 직접 인증 필요
         if excluded and state in ("예정", "미실행"):
             state = "제외"
         elif skipped and state in ("예정", "미실행"):
@@ -393,6 +399,7 @@ class Api:
                 "steps": babi_steps(j, state), "key": key, "plan": (plan or {}).get(key, ""),
                 "busy": busy or "",
                 "note": "제외 (settings.json babi_skip_boards)" if excluded
+                        else "본인인증 필요 — 건너뜀" if state == "보류" and verify
                         else "시간이 지나 건너뜀" if skipped else ""}
 
     def _blog(self, line: str):

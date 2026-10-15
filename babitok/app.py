@@ -114,6 +114,10 @@ class App:
             xml = self.dump()
             if self.dismiss_google(xml):
                 continue
+            if self.verify_screen(xml):                 # 지난번 본인인증 창이 맨 앞에 남아 있으면 닫고 시작
+                self.log(f"  {self.dev.no}: 본인인증 창이 떠 있어 '다음에 하기' 로 닫음")
+                self.close_verify()
+                continue
             hit = None
             for word in POPUP_CLOSE:
                 hit = self.find(xml, text=word) or self.find(xml, desc=word)
@@ -145,6 +149,40 @@ class App:
             time.sleep(1.5)
         return False
 
+    # -- 본인인증 ---------------------------------------------------------------------
+    def verify_screen(self, xml) -> bool:
+        return bool(self.find(xml, rid=site.VERIFY_TITLE) or self.find(xml, text=site.VERIFY_TEXT))
+
+    def close_verify(self):
+        n = self.find(self.dump(), rid=site.VERIFY_LATER) or self.find(self.dump(), text="다음에 하기")
+        if n:
+            self.tap(n, 2.0)
+        else:
+            self.b.key(4, self.devs)
+            time.sleep(1.5)
+
+    def can_write(self) -> str:
+        """커뮤니티 > 글쓰기 를 눌러 봄: 'ok'(게시판 선택 창 — 닫고 돌아옴) / 'verify'(본인인증 창) / 'fail: …'.
+        지난 글을 지우기 전에 확인 — 지운 뒤에 본인인증 창이 뜨면 지난 글만 사라지고 새 글은 못 올림."""
+        if not self.tab("커뮤니티"):
+            return "fail: 커뮤니티 탭을 못 찾음"
+        self.close_popups()
+        if not self.tap_text(site.WRITE_BUTTON, 3.0):
+            return "fail: 글쓰기 버튼을 못 찾음"
+        xml = self.dump()
+        if self.verify_screen(xml):
+            self.close_verify()
+            return "verify"
+        if not self.find(xml, text=site.BOARD_TITLE):
+            return "fail: 게시판 선택 창이 안 뜸 (로그인 안 됨?)"
+        n = self.find(xml, desc="닫기")
+        if n:
+            self.tap(n, 1.5)
+        else:
+            self.b.key(4, self.devs)
+            time.sleep(1.5)
+        return "ok"
+
     # -- 글쓰기 -----------------------------------------------------------------------
     def write(self, topic: str, title: str, body: str) -> str:
         if topic not in site.TOPICS:
@@ -157,6 +195,9 @@ class App:
         if not self.tap_text(site.WRITE_BUTTON, 3.0):
             return "fail: 글쓰기 버튼을 못 찾음"
         xml = self.dump()
+        if self.verify_screen(xml):
+            self.close_verify()
+            return "verify"
         if not self.find(xml, text=site.BOARD_TITLE):
             return "fail: 게시판 선택 창이 안 뜸 (로그인 안 됨?)"
         if not self.tap_text(site.BOARD_SURGERY, 3.0):
@@ -187,6 +228,9 @@ class App:
         if not self.tap_text(site.SUBMIT, 5.0):
             return "fail: 작성 완료 버튼을 못 찾음"
         xml = self.dump()
+        if self.verify_screen(xml):                     # 작성 완료 때 뜨는 경우도 대비
+            self.close_verify()
+            return "verify"
         if not self.find(xml, text=site.UPLOADED_TITLE):
             return "fail: '게시글이 업로드 되었어요' 가 안 뜸"
         n = self.find(xml, rid=site.NO)                 # 글 보기 말고 '아니오'

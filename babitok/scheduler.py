@@ -188,9 +188,17 @@ class BabiScheduler:
         def work():
             try:
                 r = job.run_key(k, log=self.log)
-                if not manual:
+                if r.get("skipped"):                 # 본인인증 창 — 건너뜀 (다시 시도 안 함)
+                    if not manual:
+                        self._mark(d, k, "건너뜀: 본인인증 필요")
+                    notify.both_async("🔒 바비톡 본인인증 필요 — 건너뜀",
+                                      f"{where}\n{j.board}번 폰에서 '휴대폰 본인 인증' 창이 떠서 이번 글은 건너뜀.\n"
+                                      f"그 폰에서 직접 인증하면 다음 차례부터 다시 올라갑니다.")
+                elif not manual:
                     self._mark(d, k, "성공" if r.get("ok") else f"실패: {r.get('error', '')}")
-                if r.get("ok"):
+                if r.get("skipped"):
+                    pass
+                elif r.get("ok"):
                     self._notify_success(j, d, r)
                 else:
                     notify.both_async("⚠️ 바비톡 업로드 실패", f"{where}\n이유: {r.get('error', '')}")

@@ -97,6 +97,13 @@ def run_row(j: schedule.Job, rows, header, sheet: Sheet, log=print) -> dict:
         if not app.in_front():
             raise _Fail("바비톡 앱이 안 뜸")
 
+        # 지난 글을 지우기 전에, 이 계정이 지금 글을 쓸 수 있는지(본인인증 창이 안 뜨는지) 먼저 확인
+        r = app.can_write()
+        if r == "verify":
+            raise _Verify()
+        if r != "ok":
+            raise _Fail(r[5:].strip())
+
         prev = schedule.previous_title(rows, j)
         if prev:
             r = app.delete_post(prev)
@@ -111,6 +118,8 @@ def run_row(j: schedule.Job, rows, header, sheet: Sheet, log=print) -> dict:
             log(f"  {j.board}: 지난 글 없음 (처음)")
 
         r = app.write(j.topic, j.title, j.text)
+        if r == "verify":
+            raise _Verify()
         if r != "ok":
             raise _Fail(r[5:].strip())
         log(f"  {j.board}: 글 올림")
@@ -132,6 +141,17 @@ def run_row(j: schedule.Job, rows, header, sheet: Sheet, log=print) -> dict:
         note_state(j.board, {"state": "in", "nick": nick, "why": ""})
         log(f"완료: {where} ({time.time() - t0:.0f}초)")
         return result
+    except _Verify:
+        # 휴대폰 본인 인증 창 — 자동으로는 못 넘김. 건너뛰고 기록만 (2026-10-15 83번)
+        why = "본인인증 필요 (휴대폰 본인 인증 창이 뜸 — 그 폰에서 직접 인증해야 함)"
+        log(f"!! {where} 건너뜀: {why}")
+        result.update(skipped=True, error=why)
+        try:
+            mark(sheet, header, j.row, f"{SKIP_VERIFY}: {why}")
+        except Exception as e:                         # noqa: BLE001
+            log(f"!! 시트 기록 실패: {e}")
+        note_state(j.board, {"state": "out", "nick": "", "why": why, "tag": "본인인증 필요"})
+        return result
     except _Fail as e:
         result["error"] = str(e)
     except Exception as e:                             # noqa: BLE001
@@ -148,6 +168,13 @@ def run_row(j: schedule.Job, rows, header, sheet: Sheet, log=print) -> dict:
 
 class _Fail(Exception):
     pass
+
+
+class _Verify(Exception):
+    """본인인증 창 — 실패가 아니라 건너뜀."""
+
+
+SKIP_VERIFY = "건너뜀"                    # 시트 작업 여부: '건너뜀: 본인인증 필요 (…)'
 
 
 def _author(app: App, title: str, body: str) -> str:
@@ -177,6 +204,12 @@ def check_login(no: int, log=print) -> dict:
     if not app.tab("커뮤니티") or not app.tap_text("글쓰기", 3.0):
         return {"state": "unknown", "nick": "", "why": "커뮤니티 화면을 못 읽음"}
     xml = app.dump()
+    if app.verify_screen(xml):
+        app.close_verify()
+        app.tab("홈")
+        prev = load_state().get(str(no), {})
+        return {"state": "out", "nick": prev.get("nick", ""), "tag": "본인인증 필요",
+                "why": "본인인증 필요 — 글쓰기를 누르면 휴대폰 본인 인증 창이 뜸 (그 폰에서 직접 인증)"}
     ok = bool(app.find(xml, text="게시판 선택"))
     close = app.find(xml, desc="닫기")
     if close:

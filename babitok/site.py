@@ -33,6 +33,12 @@ MY_POSTS_TITLE = "내가 작성한 게시글"           # rid navigation_title
 MY_POSTS_COMMUNITY = "커뮤니티"                 # content-desc (후기/커뮤니티/댓글 탭)
 NO_POSTS = "내가 작성한 게시글이 없습니다"
 
+# 휴대폰 본인 인증 창 (인증 안 된 계정이 글쓰기를 누르면 뜸, 2026-10-15 83번) — 자동으로는 못 넘김.
+# '다음에 하기' 로 닫고 그 작업은 건너뜀 (시트에 '건너뜀: 본인인증 필요').
+VERIFY_TITLE = f"{PKG}:id/user_verification_title"   # '휴대폰 본인 인증'
+VERIFY_LATER = f"{PKG}:id/pass_close"                # '다음에 하기'
+VERIFY_TEXT = "휴대폰 본인 인증"
+
 # 글 보기 화면 오른쪽 위: 공유(816~936) · 휴지통(936~1080) — 둘 다 desc 'None' 이라 오른쪽 것이 휴지통
 DELETE_TITLE = "게시글 삭제"                    # rid title_text, 확인 = YES
 BACK = "Back Button"                            # content-desc
