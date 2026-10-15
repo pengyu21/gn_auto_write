@@ -33,7 +33,7 @@ from . import site
 from .popups import close_popups
 
 NO_NET = "fail: 인터넷 연결 없음 (기기 네트워크 확인)"
-WRONG_PW = "fail: 이메일/비밀번호 불일치 (시트 계정 확인 — 재시도 안 함)"
+WRONG_PW = "fail: 이메일/비밀번호 불일치 (시트 계정 확인)"
 NO_SCREEN = "fail: 화면 구조를 못 읽음"
 
 
@@ -421,10 +421,25 @@ def _record_attempt(no: int, account_id: str, result: str):
         pass
 
 
+LOGIN_TRIES = 3                            # 로그인 실패 시 다시 시도 횟수 (처음 포함)
+LOGIN_RETRY_WAIT = 30                      # 다시 시도 전 기다리는 초 (8초는 너무 이르다는 요청, 2026-10-15)
+
+
 def switch(board, dev, account: dict, log=print) -> str:
     """dev 를 account({"id","pw"}) 로 로그인. 'ok' / 'skip: 이미 이 계정' / 'fail: …'.
-    결과는 login_attempts.json 에 남겨 대시보드가 '왜 로그인이 안 되는지' 보여 줍니다."""
-    result = _switch(board, dev, account, log)
+    결과는 login_attempts.json 에 남겨 대시보드가 '왜 로그인이 안 되는지' 보여 줍니다.
+
+    실패하면 최대 LOGIN_TRIES 번까지 다시 시도합니다. 맞는 비밀번호인데도 한 번씩 '불일치' 로
+    튕기는 일이 있음 (2026-10-15 94번 로테3: 12:35 불일치 → 13:10 같은 계정으로 바로 성공)."""
+    result = ""
+    for n in range(1, LOGIN_TRIES + 1):
+        result = _switch(board, dev, account, log)
+        if not result.startswith("fail") or n == LOGIN_TRIES:
+            break
+        log(f"  {dev.no}: 로그인 실패 ({result[5:].strip()}) — {LOGIN_RETRY_WAIT}초 뒤 {n + 1}/{LOGIN_TRIES}번째 다시 시도")
+        time.sleep(LOGIN_RETRY_WAIT)
+    if result.startswith("fail") and LOGIN_TRIES > 1:
+        result = f"{result} ({LOGIN_TRIES}번 시도)"
     _record_attempt(dev.no, account["id"], result)
     _record_state(dev.no, account["id"], result)
     return result
