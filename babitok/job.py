@@ -15,7 +15,7 @@ from datetime import datetime
 from core.board import ROOT, Board
 from core.sheet import Sheet
 from unni import login as unni_login
-from . import schedule
+from . import schedule, site as app_site
 from .app import App
 
 STATE = ROOT / "babi_state.json"          # 폰보드 칸: 마지막 결과·닉네임 (공개 저장소 제외)
@@ -190,7 +190,7 @@ def _author(app: App, title: str, body: str) -> str:
 
 
 def check_login(no: int, log=print) -> dict:
-    """로그인 점검: 커뮤니티 > 글쓰기 를 눌러 '게시판 선택' 이 뜨면 로그인됨. 창은 닫고 홈으로."""
+    """로그인 점검: 커뮤니티 > 글쓰기 > 성형 까지 들어가 제목·내용 칸이 보이면 글쓰기 가능. 아무것도 안 쓰고 나옴."""
     board = Board()
     devs = board.select([no])
     if not devs:
@@ -210,13 +210,33 @@ def check_login(no: int, log=print) -> dict:
         prev = load_state().get(str(no), {})
         return {"state": "out", "nick": prev.get("nick", ""), "tag": "본인인증 필요",
                 "why": "본인인증 필요 — 글쓰기를 누르면 휴대폰 본인 인증 창이 뜸 (그 폰에서 직접 인증)"}
-    ok = bool(app.find(xml, text="게시판 선택"))
-    close = app.find(xml, desc="닫기")
-    if close:
-        app.tap(close, 1.5)
+    prev = load_state().get(str(no), {})
+    if not app.find(xml, text="게시판 선택"):
+        board.key(4, devs)
+        app.tab("홈")
+        return {"state": "out", "nick": "", "why": "로그아웃 — 글쓰기에서 로그인 화면이 뜸"}
+    # 실제 글쓰기 화면까지 들어가 봄 (2026-10-15 요청): 성형 → 주제·제목·내용 칸·작성 완료가 보이면 쓸 수 있음.
+    # 아무것도 입력하지 않고 X 로 나옴 — 빈 글이면 확인 창 없이 바로 나가짐 (60번 실측).
+    app.tap_text("성형", 3.0)
+    xml = app.dump()
+    if app.verify_screen(xml):
+        app.close_verify()
+        app.tab("홈")
+        return {"state": "out", "nick": prev.get("nick", ""), "tag": "본인인증 필요",
+                "why": "본인인증 필요 — 글쓰기를 누르면 휴대폰 본인 인증 창이 뜸 (그 폰에서 직접 인증)"}
+    ready = all(app.find(xml, text=t) for t in ("눈", "코", "작성 완료")) and \
+        bool(app.find(xml, text="제목을 입력해주세요 (20자 이내)")) and bool(app.find(xml, text="내용을 입력해 주세요"))
+    back = app.find(xml, desc="Back Button")
+    if back:
+        app.tap(back, 2.0)
+        x2 = app.dump()
+        leave = app.find(x2, text="나가기") or app.find(x2, rid=f"{app_site.PKG}:id/yes_button")
+        if leave:                                       # 혹시 '나갈까요?' 창이 뜨면
+            app.tap(leave, 1.5)
     else:
         board.key(4, devs)
     app.tab("홈")
-    prev = load_state().get(str(no), {})
-    return {"state": "in" if ok else "out", "nick": prev.get("nick", "") if ok else "",
-            "why": "" if ok else "로그아웃 — 글쓰기에서 로그인 화면이 뜸"}
+    if not ready:
+        return {"state": "unknown", "nick": prev.get("nick", ""),
+                "why": "글쓰기 화면이 다르게 뜸 — 성형 게시판에서 제목·내용 칸을 못 찾음 (화면 확인)"}
+    return {"state": "in", "nick": prev.get("nick", ""), "why": ""}

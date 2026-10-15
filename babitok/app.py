@@ -131,7 +131,12 @@ class App:
     def tab(self, name: str):
         """아래 탭. 글자 노드엔 위치가 없어, 탭 줄의 클릭 칸 5개를 왼쪽부터 순서대로 대응."""
         i = site.TABS.index(name)
-        for _ in range(3):
+        for attempt in range(4):
+            if attempt:
+                time.sleep(1.5)                         # 창이 닫히는 중이면 잠깐 기다렸다 다시 봄
+            if not self.in_front():                     # '뒤로' 때문에 앱이 빠져나갔으면 다시 띄움
+                self.b.shell(f"am start -n {site.MAIN}", self.devs)
+                time.sleep(5)
             xml = self.dump()
             labels = [n for n in _nodes(xml) if n.get("text") in site.TABS]
             if len(labels) >= 5:
@@ -145,8 +150,9 @@ class App:
                         n = cells[sorted(cells)[i]]
                         self.tap(n, 3.0)
                         return True
-            self.b.key(4, self.devs)                    # 다른 화면 위면 한 번 뒤로
-            time.sleep(1.5)
+            if attempt >= 1:                            # 처음 한 번은 기다리기만, 그래도 없으면 다른 화면 위라 보고 뒤로
+                self.b.key(4, self.devs)
+                time.sleep(1.5)
         return False
 
     # -- 본인인증 ---------------------------------------------------------------------
