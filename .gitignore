@@ -8,6 +8,7 @@ login_attempts.json
 # 바비톡: 폰별 닉네임·마지막 결과, 실행 계획
 babi_state.json
 run_plan_babi.json
+babi_nicks.json
 # 폰 시리얼 -> 번호 표
 roster.csv
 # 실행 기록 / 키보드 백업 (PC 마다 다름)

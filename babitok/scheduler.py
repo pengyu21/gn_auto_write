@@ -14,7 +14,7 @@ import random
 import threading
 import time
 import traceback
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Callable, Optional
 
 from core.board import ROOT, load_settings
@@ -27,6 +27,7 @@ MAX_MINUTE = 40
 BEAT_EVERY = 300
 SHEET_EVERY = 600
 BEAT_CELL = "M1"
+NICK_UNTIL_HOUR = 6           # 매달 1일 0시~6시 사이에 닉네임 바꾸기
 
 
 class BabiScheduler:
@@ -146,6 +147,7 @@ class BabiScheduler:
         self._heartbeat(now)
         if not self.enabled:
             return
+        self._monthly_nickname(now)
         today = now.date()
         if not self.in_window(today):
             return
@@ -214,6 +216,73 @@ class BabiScheduler:
                 self._rows_at = 0
                 self.on_change()
         threading.Thread(target=work, daemon=True, name=f"babi-{j.board}").start()
+
+    # -- 매달 닉네임 바꾸기 ----------------------------------------------------------------
+    def _monthly_nickname(self, now: datetime):
+        """매달 1일 0시(말일이 끝나는 밤 12시)부터 새벽 6시 안에 한 번: 40대 닉네임을 겹치지 않는 새 이름으로.
+        (2026-10-16 요청: 한 달에 한 번, 1일 0시)"""
+        month = f"{now:%Y-%m}"
+        if now.day != 1 or now.hour >= NICK_UNTIL_HOUR or self._plan.get("nick_month") == month:
+            return
+        if getattr(self, "_nick_running", False):
+            return
+        self._nick_running = True
+        threading.Thread(target=self._run_nicknames, args=(month,), daemon=True, name="babi-nick").start()
+
+    def run_nicknames_now(self, nos=None) -> str:
+        """대시보드에서 바로 (시험용)."""
+        if getattr(self, "_nick_running", False):
+            return "이미 닉네임 바꾸는 중"
+        self._nick_running = True
+        threading.Thread(target=self._run_nicknames, args=(None, nos), daemon=True, name="babi-nick").start()
+        return "닉네임 바꾸기 시작"
+
+    def _run_nicknames(self, month, nos=None):
+        from . import nickname
+        try:
+            nos = list(nos or range(60, 100))
+            state = job.load_state()
+            taken = {v.get("nick", "") for v in state.values()}
+            for hist in nickname.load_history().values():
+                taken.update(h.get("from", "") for h in hist)
+                taken.update(h.get("to", "") for h in hist)
+            names = nickname.generate(nos, taken)
+            self.log(f"닉네임 바꾸기 시작: {len(nos)}대")
+            results, waiting = {}, list(nos)
+            deadline = time.time() + 5 * 3600            # 다른 작업 중인 폰은 끝날 때까지 기다렸다 (최대 5시간)
+            while waiting and time.time() < deadline and not self._stop.is_set():
+                for no in list(waiting):
+                    if not self.hold(no, "닉네임 변경"):
+                        continue                         # 강남언니·바비톡 작업 중 — 나중에
+                    self.on_change()
+                    try:
+                        results.update(nickname.run([no], names, log=self.log))
+                    finally:
+                        self.release(no)
+                        self.on_change()
+                    waiting.remove(no)
+                    r = results[no]
+                    if r[0] == "ok":
+                        job.note_state(no, dict(job.load_state().get(str(no), {}), nick=r[2]))
+                if waiting:
+                    self._stop.wait(60)
+            ok = {n: r for n, r in results.items() if r[0] == "ok"}
+            bad = {n: r for n, r in results.items() if r[0] != "ok"}
+            for n in waiting:
+                bad[n] = ("fail: 계속 다른 작업 중이라 못 함", "", "")
+            if month:
+                self._plan["nick_month"] = month
+                self._save()
+            self.log(f"닉네임 바꾸기 끝: 성공 {len(ok)}대" + (f", 실패 {sorted(bad)}" if bad else ""))
+            body = "\n".join(f"{n}번 {r[1]} → {r[2]}" for n, r in sorted(ok.items()))
+            if bad:
+                body += "\n\n실패:\n" + "\n".join(f"{n}번 {r[0][5:].strip()}" for n, r in sorted(bad.items()))
+            notify.both_async(f"🏷️ 바비톡 닉네임 변경 — 성공 {len(ok)} / 실패 {len(bad)}", body)
+        except Exception as exc:                         # noqa: BLE001
+            self.log(f"!! 닉네임 바꾸기 오류: {type(exc).__name__}: {exc}")
+            traceback.print_exc()
+        finally:
+            self._nick_running = False
 
     def _notify_success(self, j, d: date, r: dict):
         try:
