@@ -39,13 +39,13 @@ BEAT_CELL = "M1"
 
 
 JOB_TRIES = 3                   # 작업이 실패하면 처음 포함 최대 몇 번 (2026-10-19 요청)
-JOB_RETRY_WAIT = 60             # 다시 하기 전 기다리는 초
+JOB_RETRY_WAIT = 300            # 다시 하기 전 기다리는 초 (5분 — 바로 다시 하면 또 막힐 수 있어서, 2026-10-19)
 # 등록을 누른 뒤의 실패는 다시 하면 같은 글이 두 번 올라갈 수 있어 다시 하지 않음
 NO_RETRY = ("등록 후", "게시글이 업로드 되었어요", "작업을 못 찾음")
 
 
 def run_with_retry(run, log, who: str) -> dict:
-    """run() 이 실패하면 JOB_RETRY_WAIT 초 뒤 다시, 처음 포함 JOB_TRIES 번까지.
+    """run() 이 실패하면 JOB_RETRY_WAIT 초(5분) 뒤 다시, 처음 포함 JOB_TRIES 번까지.
     글이 이미 올라갔을 수 있는 실패(NO_RETRY, r['posted'])·건너뜀(r['skipped'])은 다시 하지 않음.
     (10/18 70번 '등록하기 버튼이 꺼져 있음', 72번 '게시판 칸을 못 찾음' 처럼 한 번 막혔다 되는 경우)"""
     r = {}
@@ -54,7 +54,7 @@ def run_with_retry(run, log, who: str) -> dict:
         err = str(r.get("error", ""))
         if r.get("ok") or r.get("skipped") or r.get("posted") or any(w in err for w in NO_RETRY) or n == JOB_TRIES:
             break
-        log(f"  {who} 실패 ({err}) — {JOB_RETRY_WAIT}초 뒤 {n + 1}/{JOB_TRIES}번째 다시 시도")
+        log(f"  {who} 실패 ({err}) — {JOB_RETRY_WAIT // 60}분 뒤 {n + 1}/{JOB_TRIES}번째 다시 시도")
         time.sleep(JOB_RETRY_WAIT)
     if not r.get("ok") and not r.get("skipped") and r.get("error") and n > 1:
         r["error"] = f"{r['error']} ({n}번 시도)"
