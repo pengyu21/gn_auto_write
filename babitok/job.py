@@ -41,8 +41,10 @@ def note_state(no: int, entry: dict):
             pass
 
 
-def account_ids() -> dict[int, str]:
-    """'바비톡아이디' 탭 {폰: 아이디}. 탭이 없거나 머리글을 못 찾으면 빈 dict."""
+def accounts() -> dict[int, dict]:
+    """'바비톡아이디' 탭 {폰: {"id","pw"}}. 머리글 No | 아이디(B) | 비번(C) | 비고(D, '폰보드60 …' 으로 폰 번호).
+    (2026-10-19: B열에 새 아이디를 넣으면 그 계정으로 바꿔 로그인)"""
+    import re
     try:
         v = Sheet().read(ACCOUNT_TAB)
     except Exception:                                  # noqa: BLE001
@@ -50,18 +52,21 @@ def account_ids() -> dict[int, str]:
     if not v:
         return {}
     h = [str(x).strip() for x in v[0]]
-    try:
-        bi = next(i for i, x in enumerate(h) if x in ("폰보드", "폰", "번호"))
-        ii = next(i for i, x in enumerate(h) if "아이디" in x or x.upper() == "ID")
-    except StopIteration:
-        return {}
+    ii = next((i for i, x in enumerate(h) if x == "아이디" or x.upper() == "ID"), 1)
+    pi = next((i for i, x in enumerate(h) if x in ("비번", "비밀번호")), 2)
+    ni = next((i for i, x in enumerate(h) if x in ("비고", "폰보드")), 3)
     out = {}
     for r in v[1:]:
-        try:
-            out[int(str(r[bi]).strip())] = str(r[ii]).strip()
-        except (ValueError, IndexError):
-            pass
+        r = list(r) + [""] * (max(ii, pi, ni) + 1)
+        m = re.search(r"폰보드\s*(\d+)", str(r[ni])) or re.fullmatch(r"\s*(\d+)\s*", str(r[ni]))
+        if m and str(r[ii]).strip():
+            out[int(m.group(1))] = {"id": str(r[ii]).strip(), "pw": str(r[pi]).strip()}
     return out
+
+
+def account_ids() -> dict[int, str]:
+    """{폰: 아이디} — 시트 업로드 계정(L열) 기록용."""
+    return {k: v["id"] for k, v in accounts().items()}
 
 
 def mark(sheet: Sheet, header, row: int, status: str):
@@ -202,20 +207,18 @@ def check_login(no: int, log=print) -> dict:
     app.launch()
     if not app.in_front():
         return {"state": "unknown", "nick": "", "why": "바비톡 앱이 안 뜸"}
-    if not app.tab("커뮤니티") or not app.tap_text("글쓰기", 3.0):
-        return {"state": "unknown", "nick": "", "why": "커뮤니티 화면을 못 읽음"}
-    xml = app.dump()
-    if app.verify_screen(xml):
-        app.close_verify()
+    r = app.open_write()                                # 팝업은 닫으면서 커뮤니티 > 글쓰기
+    prev = load_state().get(str(no), {})
+    if r == "verify":
         app.tab("홈")
-        prev = load_state().get(str(no), {})
         return {"state": "out", "nick": prev.get("nick", ""), "tag": "본인인증 필요",
                 "why": "본인인증 필요 — 글쓰기를 누르면 휴대폰 본인 인증 창이 뜸 (그 폰에서 직접 인증)"}
-    prev = load_state().get(str(no), {})
-    if not app.find(xml, text="게시판 선택"):
+    if r.startswith("fail: 게시판"):
         board.key(4, devs)
         app.tab("홈")
         return {"state": "out", "nick": "", "why": "로그아웃 — 글쓰기에서 로그인 화면이 뜸"}
+    if r != "ok":
+        return {"state": "unknown", "nick": "", "why": "커뮤니티 화면을 못 읽음 — " + r[5:].strip()}
     # 실제 글쓰기 화면까지 들어가 봄 (2026-10-15 요청): 성형 → 주제·제목·내용 칸·작성 완료가 보이면 쓸 수 있음.
     # 아무것도 입력하지 않고 X 로 나옴 — 빈 글이면 확인 창 없이 바로 나가짐 (60번 실측).
     app.tap_text("성형", 3.0)
