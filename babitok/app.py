@@ -416,7 +416,8 @@ class App:
                 return "none"
             n = self.find(xml, text=title)
             if n:
-                self.tap(n, 3.5)
+                before = sum(1 for m in _nodes(xml) if _visible(m) and m.get("text") == title)
+                self.tap(n, 3.5)                        # 같은 제목이 여러 개면 맨 위(가장 최근) 글
                 xml = self.dump()
                 if not self.find(xml, text=title):
                     return "fail: 글이 안 열림"
@@ -428,7 +429,8 @@ class App:
                 if not self.find(xml, text=site.DELETE_TITLE):
                     return "fail: 삭제 확인 창이 안 뜸"
                 self.tap(self.find(xml, rid=site.YES), 3.5)
-                if self.find(self.dump(), text=title):
+                after = sum(1 for m in _nodes(self.dump()) if _visible(m) and m.get("text") == title)
+                if after >= before:                     # 같은 제목 글이 하나 더 있으면 그건 남는 게 맞음
                     return "fail: 삭제 후에도 목록에 남아 있음"
                 return "ok"
             if i < scrolls:

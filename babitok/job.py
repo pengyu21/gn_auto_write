@@ -122,6 +122,18 @@ def run_row(j: schedule.Job, rows, header, sheet: Sheet, log=print) -> dict:
         else:
             log(f"  {j.board}: 지난 글 없음 (처음)")
 
+        # 이미 올라간 줄을 '지금 실행' 으로 다시 하면 같은 제목 글이 두 개가 됨 → 먼저 올린 같은 글을 지움 (2026-10-20 69번)
+        last = schedule.parse_uploaded(j.uploaded)      # 같은 줄은 다음 달에 또 돌아오니, 이번 차례(6일 안) 기록만
+        if last and (datetime.now() - last).days < 6:
+            r = app.delete_post(j.title)
+            if r == "ok":
+                log(f"  {j.board}: 이 줄을 다시 올리는 거라 먼저 올린 같은 글 삭제 — {j.title}")
+                result["deleted"] = (result["deleted"] + ", " if result["deleted"] else "") + j.title
+            elif r == "none":
+                log(f"  {j.board}: 먼저 올린 같은 글은 목록에 없음 — {j.title}")
+            else:
+                raise _Fail(f"먼저 올린 같은 글 삭제 실패 — {r[5:].strip()} (새 글 보류)")
+
         r = app.write(j.topic, j.title, j.text)
         if r == "verify":
             raise _Verify()
