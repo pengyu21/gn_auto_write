@@ -122,6 +122,7 @@ def run_row(j: schedule.Job, rows, header, sheet: Sheet, log=print) -> dict:
             raise _Verify()
         if r != "ok":
             raise _Fail(r[5:].strip())
+        result["posted"] = True                         # 여기부터 실패해도 다시 하지 않음 (같은 글 두 번 방지)
         log(f"  {j.board}: 글 올림")
 
         nick = ""

@@ -20,6 +20,7 @@ from typing import Callable, Optional
 from core.board import ROOT, load_settings
 from core.sheet import Sheet
 from unni import notify
+from unni.scheduler import run_with_retry          # 실패하면 1분 뒤 다시, 최대 3번 (강남언니와 같은 규칙)
 from . import job, schedule
 
 PLAN = ROOT / "run_plan_babi.json"
@@ -189,7 +190,7 @@ class BabiScheduler:
 
         def work():
             try:
-                r = job.run_key(k, log=self.log)
+                r = run_with_retry(lambda: job.run_key(k, log=self.log), self.log, f"{j.board}번")
                 if r.get("skipped"):                 # 본인인증 창 — 건너뜀 (다시 시도 안 함)
                     if not manual:
                         self._mark(d, k, "건너뜀: 본인인증 필요")
