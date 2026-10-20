@@ -24,6 +24,7 @@ from collections import deque
 import re
 import sys
 import threading
+import time
 import traceback
 from datetime import date, datetime
 
@@ -44,6 +45,7 @@ STATE_FILE = ROOT / "login_state.json"
 LOG_FILE = ROOT / "dashboard.log"          # 전체 로그 (공개 저장소 제외). 화면에는 최근 300줄만
 LOG_BUFFER: deque = deque(maxlen=300)
 PHONES = list(range(60, 100))
+BABI_SHEET_EVERY = 300                    # 바비톡 시트 다시 읽는 간격(초) — 화면 탭과 상관없이
 
 
 def load_state() -> dict[int, dict]:
@@ -126,6 +128,7 @@ class Api:
         self._sched = Scheduler(log=self._log, on_change=self._changed)
         # 바비톡: 같은 폰보드를 쓰므로 두 스케줄러가 서로의 작업 중인 폰을 기다림
         self._brows: list[bschedule.Job] | None = None
+        self._brows_at = 0.0
         self._bbusy = False
         self._bsched = BabiScheduler(log=self._blog, on_change=self._changed, other=self._sched)
         self._sched.other = self._bsched
@@ -310,6 +313,7 @@ class Api:
 
     def babi_reload(self, quiet: bool = False) -> int:
         self._brows = bschedule.load_rows()
+        self._brows_at = time.time()
         self._bsched.invalidate()
         if not quiet:
             self._blog(f"시트 '{bschedule.TAB}' {len(self._brows)}행 읽음")
@@ -368,7 +372,9 @@ class Api:
             self._bbusy = False
 
     def _bload(self) -> list[bschedule.Job]:
-        if self._brows is None:
+        # 화면 탭이 강남언니에 있으면 화면 쪽 5분 새로고침이 바비톡 시트를 안 읽어, 업로드 결과가 대시보드·웹앱에
+        # 안 보이던 문제 (2026-10-20 71번) → 탭과 상관없이 5분 지나면 여기서 다시 읽음
+        if self._brows is None or time.time() - self._brows_at > BABI_SHEET_EVERY:
             self.babi_reload(quiet=True)
         return self._brows
 
@@ -407,6 +413,7 @@ class Api:
 
     def _changed(self):
         """스케줄러 상태가 바뀌면 화면에 알림 (작업 시작/끝, 미리 로그인). 웹앱에도 바로 보냄."""
+        self._brows_at = 0.0                            # 바비톡 결과도 다음에 그릴 때 시트에서 새로 읽음
         remote = getattr(self, "_remote", None)
         if remote:
             remote.poke()
