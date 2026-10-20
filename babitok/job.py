@@ -148,7 +148,9 @@ def run_row(j: schedule.Job, rows, header, sheet: Sheet, log=print) -> dict:
         if not nick:
             log(f"  {j.board}: 내가 쓴 글 목록에서 방금 글 확인을 못 함 (올라간 창은 확인됨)")
         result.update(ok=True, nick=nick)
-        acc = account_ids().get(j.board) or nick
+        # 업로드 계정 칸: '닉네임 / 아이디' — 어느 계정으로 올라갔는지 검수하기 쉽게 (2026-10-20 요청)
+        nick_shown = nick or load_state().get(str(j.board), {}).get("nick", "")
+        acc = " / ".join(x for x in (nick_shown, account_ids().get(j.board, "")) if x)
         cols = [schedule.col_letter(header, k) for k in ("status", "uploaded", "account")]
         values = [schedule.SUCCESS, schedule.sheet_serial(datetime.now()), acc]
         if [ord(c) for c in cols] == list(range(ord(cols[0]), ord(cols[0]) + 3)):
