@@ -118,6 +118,18 @@ body.readonly #autoBtn{pointer-events:none}
 .alert .ad{color:var(--ink);opacity:.8;min-width:0;overflow-wrap:anywhere}
 .alert .aw{display:inline-block;margin-left:6px;font-size:11px;font-weight:700;padding:0 6px;border-radius:4px;background:var(--panel);border:1px solid currentColor;white-space:nowrap}
 .alert.c-fail{border-color:#F1C4BE} .alert.c-hold{border-color:#EAD9AE} .alert.c-gone{border-color:var(--line)}
+/* 문제 폰 접어두기 (2026-10-22): 접으면 이유별 개수만, 펴면 같은 이유끼리 한 줄로 묶어 번호 나열 */
+.alerts details{border:1px solid var(--line);border-radius:8px;background:var(--panel)}
+.alerts summary{cursor:pointer;list-style:none;display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:7px 10px;font-size:13px;font-weight:700}
+.alerts summary::-webkit-details-marker{display:none}
+.alerts summary::before{content:'▸';color:var(--muted);transition:transform .15s}
+.alerts details[open] summary::before{transform:rotate(90deg)}
+.alerts summary .sc{font-size:12px;font-weight:700;padding:1px 7px;border-radius:999px;border:1px solid currentColor}
+.alerts summary .sc.c-fail{color:var(--fail)} .alerts summary .sc.c-hold{color:var(--hold)} .alerts summary .sc.c-gone{color:var(--muted)}
+.alerts .ab{display:grid;gap:6px;padding:0 8px 8px}
+.alert .nums{display:flex;flex-wrap:wrap;gap:3px 5px}
+.alert .nums b{font-family:var(--f-num);font-size:13px}
+.alert .nums b.job{text-decoration:underline;text-underline-offset:2px}
 
 .calhead{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin-bottom:10px}
 .calhead h2{margin:0;font-size:15px;min-width:110px;text-align:center}
@@ -559,20 +571,37 @@ function renderBoard() {
     b.onclick = () => openPhone(n);
     el.appendChild(b);
   }
-  const al = [];
+  // 같은 이유끼리 묶음 → 접힌 줄엔 이유별 개수만 (바비톡 본인인증 30대처럼 많으면 화면을 다 차지해서)
+  const groups = new Map();
   for (let n = 60; n <= 99; n++) {
     const p = PH[n]; if (!p || p.state === 'in') continue;
-    const j = assigned.get(n);
     const tag = p.tag || {unknown: '판독 불가', out: '로그인 안 됨', gone: '연결 안 됨'}[p.state] || '확인 필요';
     const cls = p.state === 'gone' ? 'c-gone' : p.state === 'out' && tag === '로그아웃' ? 'c-hold' : 'c-fail';
     // '인터넷 안 됨 — …', '로그아웃 상태 — …' 처럼 칩과 같은 말로 시작하면 앞부분은 떼고 설명만
     let why = p.why || '';
     const cut = why.indexOf(' — ');
     if (cut > 0 && cut <= 12) why = why.slice(cut + 3);
-    al.push(`<div class="alert ${cls}"><span class="an">${n}</span><span class="at">${esc(tag)}</span>
-      <span class="ad">${esc(why)}${j ? `<span class="aw">이날 ${j.hour}시 작업</span>` : ''}</span></div>`);
+    if (!groups.has(tag)) groups.set(tag, {cls, nos: [], whys: new Set()});
+    const g = groups.get(tag);
+    g.nos.push(n); if (why) g.whys.add(why);
   }
-  $('alerts').innerHTML = al.join('');
+  const total = [...groups.values()].reduce((a, g) => a + g.nos.length, 0);
+  if (!total) { $('alerts').innerHTML = ''; return; }
+  const rows = [...groups].map(([tag, g]) => {
+    const nums = g.nos.map(n => { const j = assigned.get(n);
+      return `<b${j ? ` class="job" title="이날 ${j.hour}시 작업"` : ''}>${n}</b>`; }).join('');
+    const why = g.whys.size === 1 ? [...g.whys][0] : g.whys.size ? '폰마다 다름 — 칸을 눌러 확인' : '';
+    return `<div class="alert ${g.cls}"><span class="an">${g.nos.length}대</span><span class="at">${esc(tag)}</span>
+      <span class="ad"><span class="nums">${nums}</span>${why ? `<div>${esc(why)}</div>` : ''}</span></div>`;
+  }).join('');
+  const chips = [...groups].map(([tag, g]) => `<span class="sc ${g.cls}">${esc(tag)} ${g.nos.length}</span>`).join('');
+  let open = false;
+  try { open = localStorage.getItem('alertsOpen') === '1'; } catch (e) { /* 기본은 접힘 */ }
+  $('alerts').innerHTML = `<details${open ? ' open' : ''}><summary>문제 폰 ${total}대 ${chips}</summary>
+    <div class="ab">${rows}<div class="sub" style="font-size:11px">밑줄 = 고른 날 작업 있는 폰</div></div></details>`;
+  $('alerts').querySelector('details').addEventListener('toggle', e => {
+    try { localStorage.setItem('alertsOpen', e.target.open ? '1' : '0'); } catch (err) { /* 저장 못 해도 동작 */ }
+  });
 }
 
 function renderCal() {
