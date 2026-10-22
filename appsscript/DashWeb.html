@@ -127,9 +127,11 @@ body.readonly #autoBtn{pointer-events:none}
 .alerts summary .sc{font-size:12px;font-weight:700;padding:1px 7px;border-radius:999px;border:1px solid currentColor}
 .alerts summary .sc.c-fail{color:var(--fail)} .alerts summary .sc.c-hold{color:var(--hold)} .alerts summary .sc.c-gone{color:var(--muted)}
 .alerts .ab{display:grid;gap:6px;padding:0 8px 8px}
-.alert .nums{display:flex;flex-wrap:wrap;gap:3px 5px}
-.alert .nums b{font-family:var(--f-num);font-size:13px}
-.alert .nums b.job{text-decoration:underline;text-underline-offset:2px}
+.alert .nums{display:grid;grid-template-columns:repeat(auto-fill,34px);gap:4px}
+/* 번호 칩은 모두 같은 크기. 고른 날 작업 있는 폰만 테두리 색 (.job 은 작업 목록 카드 이름이라 쓰지 않음) */
+.alert .nums b{box-sizing:border-box;height:22px;line-height:20px;text-align:center;font-family:var(--f-num);font-size:12px;font-weight:700;border:1px solid var(--line);border-radius:4px;background:var(--panel)}
+.alert .nums b.wk{border-color:var(--accent);color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+.alert .ad > div{margin-top:4px}
 
 .calhead{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin-bottom:10px}
 .calhead h2{margin:0;font-size:15px;min-width:110px;text-align:center}
@@ -589,7 +591,7 @@ function renderBoard() {
   if (!total) { $('alerts').innerHTML = ''; return; }
   const rows = [...groups].map(([tag, g]) => {
     const nums = g.nos.map(n => { const j = assigned.get(n);
-      return `<b${j ? ` class="job" title="이날 ${j.hour}시 작업"` : ''}>${n}</b>`; }).join('');
+      return `<b${j ? ` class="wk" title="이날 ${j.hour}시 작업"` : ''}>${n}</b>`; }).join('');
     const why = g.whys.size === 1 ? [...g.whys][0] : g.whys.size ? '폰마다 다름 — 칸을 눌러 확인' : '';
     return `<div class="alert ${g.cls}"><span class="an">${g.nos.length}대</span><span class="at">${esc(tag)}</span>
       <span class="ad"><span class="nums">${nums}</span>${why ? `<div>${esc(why)}</div>` : ''}</span></div>`;
@@ -598,7 +600,7 @@ function renderBoard() {
   let open = false;
   try { open = localStorage.getItem('alertsOpen') === '1'; } catch (e) { /* 기본은 접힘 */ }
   $('alerts').innerHTML = `<details${open ? ' open' : ''}><summary>문제 폰 ${total}대 ${chips}</summary>
-    <div class="ab">${rows}<div class="sub" style="font-size:11px">밑줄 = 고른 날 작업 있는 폰</div></div></details>`;
+    <div class="ab">${rows}<div class="sub" style="font-size:11px">테두리 색 번호 = 고른 날 작업 있는 폰</div></div></details>`;
   $('alerts').querySelector('details').addEventListener('toggle', e => {
     try { localStorage.setItem('alertsOpen', e.target.open ? '1' : '0'); } catch (err) { /* 저장 못 해도 동작 */ }
   });
