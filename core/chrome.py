@@ -12,12 +12,18 @@ PKG = "com.android.chrome"
 MAIN = f"{PKG}/com.google.android.apps.chrome.Main"
 
 
+TAB_APP_ID = "gn.auto.write"     # 크롬이 '이 앱이 연 탭' 으로 기억할 이름
+
+
 def open_url(board: Board, devs, url: str):
     """주소 열기. application_id 를 붙이면 크롬이 새 탭을 만들지 않고
-    지난번에 연 탭을 다시 씁니다 (안 붙이면 열 때마다 탭이 하나씩 쌓입니다)."""
+    지난번에 연 탭을 다시 씁니다 (안 붙이면 열 때마다 탭이 하나씩 쌓입니다).
+
+    application_id 로 크롬 자기 이름(com.android.chrome)을 넣으면 크롬이 무시하고 매번 새 탭을 엶 —
+    로그인 한 번에 탭 3개씩 늘어 64번이 2천 개까지 쌓였음 (2026-10-29 실측). 다른 이름이면 같은 탭을 다시 씀."""
     board.run(devs, lambda d: ["shell", "am", "start", "-a", "android.intent.action.VIEW",
                                "-d", url, "--es", "com.android.browser.application_id",
-                               PKG, "-n", MAIN], timeout=60)
+                               TAB_APP_ID, "-n", MAIN], timeout=60)
 
 
 def in_front(board: Board, devs) -> list:
@@ -111,6 +117,19 @@ def tab_count(xml) -> Optional[int]:
         return 0
     m = re.search(r"(\d+)개 탭", xml) or re.search(r"탭 (\d+)개", xml)
     return int(m.group(1)) if m else None
+
+
+TAB_LIMIT = 8                    # 이보다 많으면 다 닫음 — 폰 과부하 방지 (2026-10-29 요청: 10개 이내)
+
+
+def trim_tabs(board: Board, devs, limit: int = TAB_LIMIT) -> list[int]:
+    """크롬 탭이 limit 개보다 많은 기기만 모두 닫음. 닫은 기기 번호 목록. (로그인 시도마다 부름)"""
+    screens = screen.dump(board, devs)
+    many = [d for d in devs if (tab_count(screens.get(d.no)) or 0) > limit]
+    if many:
+        print(f"  크롬 탭이 {limit}개 넘어 정리: {sorted(d.no for d in many)}")
+        close_all_tabs(board, many)
+    return [d.no for d in many]
 
 
 def close_all_tabs(board: Board, devs, max_steps: int = 6, _retry: bool = True) -> dict[int, int]:

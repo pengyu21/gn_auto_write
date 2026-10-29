@@ -433,6 +433,10 @@ def switch(board, dev, account: dict, log=print) -> str:
     튕기는 일이 있음 (2026-10-15 94번 로테3: 12:35 불일치 → 13:10 같은 계정으로 바로 성공)."""
     result = ""
     for n in range(1, LOGIN_TRIES + 1):
+        try:                                    # 로그인 한 번에 탭이 하나씩 늘 수 있어 시도마다 상한 확인
+            chrome.trim_tabs(board, [dev])
+        except Exception:                       # noqa: BLE001 — 탭 정리 실패로 로그인을 막지 않음
+            pass
         result = _switch(board, dev, account, log)
         if not result.startswith("fail") or n == LOGIN_TRIES:
             break
