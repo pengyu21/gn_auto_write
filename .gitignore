@@ -28,3 +28,7 @@ __pycache__/
 dashboard_tk.py
 .vscode/
 .idea/
+
+# ── 앱스스크립트 (clasp) — 시트 쪽 원본 Code.gs 등은 공개 저장소에 올리지 않음 ──
+gas/
+.clasp.json
