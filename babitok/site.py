@@ -39,6 +39,17 @@ VERIFY_TITLE = f"{PKG}:id/user_verification_title"   # '휴대폰 본인 인증'
 VERIFY_LATER = f"{PKG}:id/pass_close"                # '다음에 하기'
 VERIFY_TEXT = "휴대폰 본인 인증"
 
+# 새로 로그인한 계정에 뜨는 관심 시술 고르기 화면 (2026-10-29 84번, ServiceTypeSelectComposeActivity).
+# 앱을 다시 켜도 고를 때까지 계속 뜸 → '아직 고민 중이에요' 로 넘김. (인터넷이 끊기면 눌러도 반응 없음)
+ONBOARD_TITLE = "고민 중인 시술법을"
+ONBOARD_SKIP = "아직 고민 중이에요"
+
+# 네이버 로그인 (2026-10-19 84번 실측): 시작 화면 '다른 방법으로 시작하기' → '네이버 로그인'(desc) →
+# 네이버 앱(com.nhn.android.search) 화면의 EditText 2개(아이디·비밀번호) → '로그인'. 아이디는 @naver.com 뺀 앞부분.
+OTHER_LOGIN = "다른 방법으로 시작하기"
+NAVER_LOGIN = "네이버 로그인"
+NAVER_PKG = "com.nhn.android.search"
+
 # 글 보기 화면 오른쪽 위: 공유(816~936) · 휴지통(936~1080) — 둘 다 desc 'None' 이라 오른쪽 것이 휴지통
 DELETE_TITLE = "게시글 삭제"                    # rid title_text, 확인 = YES
 BACK = "Back Button"                            # content-desc

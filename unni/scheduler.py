@@ -310,6 +310,8 @@ class Scheduler:
             tag = f"{start:%Y-%m-%d %H:%M}"
             if prepped.get(str(no)) == tag or self.occupied(no) or running >= MAX_PREP:
                 continue
+            if self._plan.get("prep_failed", {}).get(str(no)) == tag:
+                continue                                # 이 작업용 미리 로그인은 이미 실패 — 작업 시각에 작업이 직접 다시 함
             running += 1
             self._start_prep(j, tag)
 
@@ -334,9 +336,23 @@ class Scheduler:
                 r = login.switch(board, devs[0], account, log=self.log)
                 if r.startswith(("ok", "skip")):
                     self._plan.setdefault("prepped", {})[str(j.board)] = tag
+                    self._plan.get("prep_failed", {}).pop(str(j.board), None)
                     self._save()
                 else:
-                    self.log(f"  {j.board}번 미리 로그인 실패: {r} — 작업 시각에 다시 시도")
+                    # 실패하면 이 작업 시각까지 다시 하지 않음. 예전엔 20초마다 다시 해서 (매번 로그아웃·로그인 창을 새 탭으로 엶)
+                    # 10/28~29 64번이 비번 불일치로 460번 넘게 반복 → 크롬 탭 2천 개, 그 폰이 계속 '강언 사용 중' 으로 잡힘
+                    self._plan.setdefault("prep_failed", {})[str(j.board)] = tag
+                    self._save()
+                    self.log(f"  {j.board}번 미리 로그인 실패: {r} — 작업 시각({tag})에 다시 시도")
+                    notify.both_async("⚠️ 강남언니 미리 로그인 실패",
+                                      f"{j.board}번 · 로테 {j.rotation} ({tag} 작업용)\n"
+                                      f"이유: {r[5:].strip() if r.startswith('fail') else r}\n"
+                                      f"'강언아이디' 시트 계정을 확인해 주세요. 작업 시각에 한 번 더 로그인해 봅니다.")
+                try:                                    # 로그인 창이 탭으로 남지 않게
+                    from core import chrome
+                    chrome.close_all_tabs(board, devs)
+                except Exception as exc:                # noqa: BLE001
+                    self.log(f"  {j.board}번 미리 로그인 뒤 탭 정리 실패: {exc}")
             except Exception as exc:                 # noqa: BLE001
                 self.log(f"!! {j.board}번 미리 로그인 오류: {exc}")
             finally:

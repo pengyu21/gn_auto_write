@@ -132,6 +132,16 @@ class App:
                 self.close_verify()
                 closed += 1
                 continue
+            if self.find(xml, contains=site.ONBOARD_TITLE):   # 새로 로그인하면 뜨는 '고민 중인 시술법을 선택해주세요'
+                n = self.find(xml, text=site.ONBOARD_SKIP) or self.find(xml, desc="Back Button")
+                self.log(f"  {self.dev.no}: '시술법 선택' 안내 화면 — '{site.ONBOARD_SKIP}' 로 넘김")
+                if n:
+                    self.tap(n, 3.0)
+                else:
+                    self.b.key(4, self.devs)
+                    time.sleep(2.0)
+                closed += 1
+                continue
             hit, word = None, ""
             for word in POPUP_CLOSE:
                 hit = self.find(xml, text=word) or self.find(xml, desc=word)
@@ -302,20 +312,85 @@ class App:
         self.close_popups()
         return "ok"
 
-    def switch_account(self, email: str, pw: str) -> str:
-        """지금 계정이 email 이면 그대로, 아니면 로그아웃 후 email 로 로그인. 'ok'/'skip'/'fail: …'."""
+    def login_naver(self, naver_id: str, pw: str) -> str:
+        """시작 화면 → '다른 방법으로 시작하기' → '네이버 로그인' → 네이버 화면에 아이디(@naver.com 뺌)·비밀번호 → 로그인.
+        'ok' / 'fail: …'. (2026-10-29 요청: 네이버 계정은 @naver.com 을 빼고 입력)"""
+        nid = naver_id.split("@")[0].strip()
+        if not self.in_front():
+            self.b.shell(f"am start -n {site.MAIN}", self.devs)
+            time.sleep(5)
+        for _ in range(4):                              # 아래 시트(카카오·네이버·페이스북·이메일)가 뜰 때까지
+            xml = self.dump()
+            if self.find(xml, desc=site.NAVER_LOGIN) or self.find(xml, text=site.NAVER_LOGIN):
+                break
+            n = self.find(xml, text=site.OTHER_LOGIN)
+            if n:
+                self.tap(n, 2.5)
+            else:
+                time.sleep(2.0)
+        else:
+            return "fail: '네이버 로그인' 버튼이 안 보임 (로그아웃 안 됨?)"
+        xml = self.dump()
+        self.tap(self.find(xml, desc=site.NAVER_LOGIN) or self.find(xml, text=site.NAVER_LOGIN), 5.0)
+        edits = []
+        for _ in range(5):                              # 네이버 앱 로그인 화면 (또는 바로 바비톡으로 돌아옴)
+            xml = self.dump()
+            if site.PKG in xml and not self.login_screen(xml) and not self.find(xml, desc=site.NAVER_LOGIN):
+                return "fail: 네이버에 이미 다른 계정이 로그인돼 있어 바로 들어감 — 어떤 아이디인지 확인 필요"
+            edits = [n for n in _nodes(xml) if n.get("class", "").endswith("EditText")]
+            if len(edits) >= 2:
+                break
+            time.sleep(2.0)
+        else:
+            return "fail: 네이버 로그인 화면이 안 뜸"
+        with keyboard.adb_ime(self.b, self.devs) as on:
+            for box, value in ((edits[0], nid), (edits[1], pw)):
+                self.tap(box, 1.0)
+                keyboard.clear(self.b, self.devs, on)
+                keyboard.type_text(self.b, self.devs, lambda d: value, on)
+                time.sleep(1.0)
+            keyboard.hide(self.b, self.devs)
+            time.sleep(1.0)
+        xml = self.dump()
+        btn = next((n for n in _nodes(xml) if n.get("text") == "로그인" and _visible(n)), None)
+        if not btn:
+            return "fail: 네이버 '로그인' 버튼을 못 찾음"
+        self.tap(btn, 6.0)
+        for _ in range(5):                              # 바비톡으로 돌아올 때까지
+            xml = self.dump()
+            if site.NAVER_PKG not in xml:
+                break
+            msg = next((n.get("text", "") for n in _nodes(xml) if n.get("text") and any(
+                w in n.get("text", "") for w in ("잘못", "일치", "자동입력", "확인", "보호", "새로운 기기", "오류"))), "")
+            if msg:
+                return f"fail: 네이버 로그인 안 됨 — {msg[:60]}"
+            time.sleep(2.0)
+        else:
+            return "fail: 네이버 로그인 뒤 바비톡으로 안 돌아옴"
+        time.sleep(2.0)
+        self.close_popups()
+        return "ok"
+
+    def switch_account(self, email: str, pw: str, naver: bool = False) -> str:
+        """지금 계정이 email 이면 그대로, 아니면 로그아웃 후 로그인. naver=True 면 네이버 로그인(@naver.com 뺀 아이디).
+        'ok'/'skip'/'fail: …'. 네이버 가입 계정은 내 정보에 메일 대신 '네이버…' 로만 나와 아이디까지는 확인 못 함."""
+        key = email.split("@")[0].lower()
         now = self.current_account()
-        if now and now.split("@")[0].lower() == email.split("@")[0].lower():
+        if now and (now.split("@")[0].lower() == key or (naver and key in now.lower())):
             return "skip: 이미 이 계정"
         if now or not self.login_screen():
             r = self.logout()
             if r != "ok":
                 return r
-        r = self.login_email(email, pw)
+        r = self.login_naver(email, pw) if naver else self.login_email(email, pw)
         if r != "ok":
             return r
         got = self.current_account()
-        if got.split("@")[0].lower() != email.split("@")[0].lower():
+        if naver:
+            if not got:
+                return "fail: 네이버 로그인 뒤에도 로그인 안 된 상태"
+            return "ok"                                 # 네이버 화면에 직접 넣은 아이디라 그대로 믿음
+        if got.split("@")[0].lower() != key:
             return f"fail: 로그인 뒤 계정이 다름 ({got[:3]}***)"
         return "ok"
 

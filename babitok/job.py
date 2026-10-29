@@ -42,8 +42,9 @@ def note_state(no: int, entry: dict):
 
 
 def accounts() -> dict[int, dict]:
-    """'바비톡아이디' 탭 {폰: {"id","pw"}}. 머리글 No | 아이디(B) | 비번(C) | 비고(D, '폰보드60 …' 으로 폰 번호).
-    (2026-10-19: B열에 새 아이디를 넣으면 그 계정으로 바꿔 로그인)"""
+    """'바비톡아이디' 탭 {폰: {"id","pw","naver","verified"}}. 열은 머리글 이름으로 찾음.
+    2026-10-29 시트: No | 폰보드 번호('폰보드60') | 아이디 | 비번 | 비고 | 네이버 여부(O) | 인증 여부.
+    (예전 시트처럼 폰 번호가 비고에 '폰보드60 …' 으로 있어도 읽음)"""
     import re
     try:
         v = Sheet().read(ACCOUNT_TAB)
@@ -52,15 +53,26 @@ def accounts() -> dict[int, dict]:
     if not v:
         return {}
     h = [str(x).strip() for x in v[0]]
-    ii = next((i for i, x in enumerate(h) if x == "아이디" or x.upper() == "ID"), 1)
-    pi = next((i for i, x in enumerate(h) if x in ("비번", "비밀번호")), 2)
-    ni = next((i for i, x in enumerate(h) if x in ("비고", "폰보드")), 3)
+    col = lambda test, default=None: next((i for i, x in enumerate(h) if test(x)), default)   # noqa: E731
+    ii = col(lambda x: x == "아이디" or x.upper() == "ID", 1)
+    pi = col(lambda x: x in ("비번", "비밀번호"), 2)
+    phone_cols = [i for i in (col(lambda x: "폰보드" in x), col(lambda x: x == "비고")) if i is not None]
+    nv = col(lambda x: "네이버" in x)
+    vi = col(lambda x: "인증" in x)
     out = {}
     for r in v[1:]:
-        r = list(r) + [""] * (max(ii, pi, ni) + 1)
-        m = re.search(r"폰보드\s*(\d+)", str(r[ni])) or re.fullmatch(r"\s*(\d+)\s*", str(r[ni]))
+        r = list(r) + [""] * (len(h) + 1)
+        m = None
+        for c in phone_cols:
+            m = re.search(r"폰보드\s*(\d+)", str(r[c])) or re.fullmatch(r"\s*(\d+)\s*", str(r[c]))
+            if m:
+                break
         if m and str(r[ii]).strip():
-            out[int(m.group(1))] = {"id": str(r[ii]).strip(), "pw": str(r[pi]).strip()}
+            out[int(m.group(1))] = {
+                "id": str(r[ii]).strip(), "pw": str(r[pi]).strip(),
+                "naver": nv is not None and str(r[nv]).strip().upper() in ("O", "○", "Y", "예", "네이버"),
+                "verified": str(r[vi]).strip() if vi is not None else "",
+            }
     return out
 
 
