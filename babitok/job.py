@@ -81,6 +81,23 @@ def account_ids() -> dict[int, str]:
     return {k: v["id"] for k, v in accounts().items()}
 
 
+def _account_changed(rows, j) -> str:
+    """이 폰의 지난 글을 올린 계정(시트 업로드 계정 칸 '닉네임 / 아이디')이 지금 '바비톡아이디' 계정과 다르면
+    이전 아이디 앞 3자('abc***'), 같거나 알 수 없으면 ''. (닉네임만 적힌 옛 기록은 알 수 없음 → 예전처럼 찾아봄)"""
+    best = None
+    for x in rows:
+        if x.board != j.board or x.row == j.row or not x.status.startswith(schedule.SUCCESS):
+            continue
+        t = schedule.parse_uploaded(x.uploaded)
+        if t and (best is None or t > best[0]):
+            best = (t, x)
+    if not best or " / " not in best[1].account:
+        return ""
+    old = best[1].account.split(" / ")[-1].split("@")[0].strip().lower()
+    now = accounts().get(j.board, {}).get("id", "").split("@")[0].strip().lower()
+    return f"{old[:3]}***" if old and now and old != now else ""
+
+
 def mark(sheet: Sheet, header, row: int, status: str):
     sheet.write(schedule.TAB, f"{schedule.col_letter(header, 'status')}{row}", [[status]], text=True)
 
@@ -122,7 +139,12 @@ def run_row(j: schedule.Job, rows, header, sheet: Sheet, log=print) -> dict:
             raise _Fail(r[5:].strip())
 
         prev = schedule.previous_title(rows, j)
-        if prev:
+        moved = _account_changed(rows, j)
+        if prev and moved:
+            # 계정을 바꾼 폰: 지난 글은 이전 계정 글이라 지금 계정 '내가 쓴 글' 에 없음 → 찾지 않고 새 글만 (2026-10-29)
+            log(f"  {j.board}: 계정이 바뀌어 지난 글(이전 계정 {moved}) 은 못 지움 — 새 글만 올림 · {prev}")
+            result["old_left"] = prev
+        elif prev:
             r = app.delete_post(prev)
             if r == "ok":
                 log(f"  {j.board}: 지난 글 삭제됨 — {prev}")
