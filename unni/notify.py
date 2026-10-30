@@ -46,18 +46,27 @@ def telegram_async(text: str):
 MAIL_TAB = "업로드이력"
 
 
-MAIL_HEAD = ["시각", "앱", "로테이션", "제목", "내용", "URL", "메일 보냄"]     # 2026-10-30 요청 (예전: 시각|제목|내용|메일 보냄)
+# 열은 시트 1행 머리글 이름으로 맞춰 적음 — 사용자가 열을 넣거나 옮겨도 그대로 (2026-10-30 '폰보드' 열 추가)
+MAIL_HEAD = ["시각", "앱", "로테이션", "폰보드", "제목", "내용", "URL", "메일 보냄"]   # 머리글을 못 읽을 때 쓰는 기본값
 
 
-def history_row(at: str, title: str, body: str, sent: str = "") -> list[str]:
-    """'업로드이력' 한 줄: 시각 | 앱(강남언니/바비톡) | 로테이션 | 제목 | 내용 | URL(강남언니 글) | 메일 보냄.
-    앱·로테이션·URL 은 알림 제목·내용에서 뽑음 (예전 이력을 바꿀 때도 같은 규칙)."""
+def history_fields(at: str, title: str, body: str, sent: str = "") -> dict[str, str]:
+    """'업로드이력' 한 줄의 칸 {머리글: 값}. 앱·로테이션·폰보드·URL 은 알림 제목·내용에서 뽑음
+    (예전 이력을 바꿀 때도 같은 규칙)."""
     import re
     text = f"{title}\n{body}"
     app = "바비톡" if "바비톡" in title else "강남언니" if ("강남언니" in text or "로테" in body or "unni.app" in body) else ""
     rot = re.search(r"로테\s*(\d+)", text)
+    no = re.search(r"(?<!\d)(\d{2})번", body)
     url = re.search(r"https?://(?:www\.)?unni\.app/community/\d+", body)
-    return [at, app, rot.group(1) if rot and app == "강남언니" else "", title, body, url.group(0) if url else "", sent]
+    return {"시각": at, "앱": app, "로테이션": rot.group(1) if rot and app == "강남언니" else "",
+            "폰보드": no.group(1) if no else "", "제목": title, "내용": body,
+            "URL": url.group(0) if url else "", "메일 보냄": sent}
+
+
+def history_row(head: list[str], fields: dict[str, str]) -> list[str]:
+    """머리글 순서대로 값을 늘어놓음. 모르는 머리글 칸은 비움."""
+    return [fields.get(str(h).strip(), "") for h in head]
 
 
 def queue_mail(title: str, body: str) -> bool:
@@ -66,7 +75,16 @@ def queue_mail(title: str, body: str) -> bool:
     try:
         from datetime import datetime
         from core.sheet import Sheet
-        Sheet().append(MAIL_TAB, [history_row(datetime.now().strftime("%Y-%m-%d %H:%M:%S"), title, body)], text=True)
+        sh = Sheet()
+        try:
+            head = [str(x).strip() for x in (sh.read(MAIL_TAB, "A1:Z1") or [[]])[0]]
+            while head and not head[-1]:                # 칸 위치는 그대로 두고 끝의 빈칸만 뗌
+                head.pop()
+            head = head or MAIL_HEAD
+        except Exception:                               # noqa: BLE001
+            head = MAIL_HEAD
+        f = history_fields(datetime.now().strftime("%Y-%m-%d %H:%M:%S"), title, body)
+        sh.append(MAIL_TAB, [history_row(head, f)], text=True)
         return True
     except Exception:                                   # noqa: BLE001 — 탭이 아직 없으면 등
         return False
