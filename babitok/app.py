@@ -335,8 +335,10 @@ class App:
         edits = []
         for _ in range(5):                              # 네이버 앱 로그인 화면 (또는 바로 바비톡으로 돌아옴)
             xml = self.dump()
-            if site.PKG in xml and not self.login_screen(xml) and not self.find(xml, desc=site.NAVER_LOGIN):
-                return "fail: 네이버에 이미 다른 계정이 로그인돼 있어 바로 들어감 — 어떤 아이디인지 확인 필요"
+            if self.find(xml, text="MY 바비톡"):         # 네이버 앱에 로그인된 계정으로 입력 없이 바로 들어옴 (10/30 84번)
+                self.log(f"  {self.dev.no}: 네이버 앱에 로그인된 계정으로 바로 들어감 (아이디는 바비톡 화면에 안 나옴)")
+                self.close_popups()
+                return "ok"
             edits = [n for n in _nodes(xml) if n.get("class", "").endswith("EditText")]
             if len(edits) >= 2:
                 break
