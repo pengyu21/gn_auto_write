@@ -63,19 +63,21 @@ function installWatch() {
     '업로드 완료 메일은 \'' + WATCH_MAIL_TAB + '\' 탭을 거쳐 ' + WATCH_EVERY_MIN + '분 안에 옵니다.');
 }
 
-/** '업로드이력' 탭 (없으면 만듦): A 시각, B 제목, C 내용, D 메일 보냄 */
+/** '업로드이력' 탭 (없으면 만듦). 2026-10-30 열: A 시각 | B 앱 | C 로테이션 | D 제목 | E 내용 | F URL | G 메일 보냄 */
+const WATCH_MAIL_HEAD = ['시각', '앱', '로테이션', '제목', '내용', 'URL', '메일 보냄'];
 function watchMailTab_() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   let sh = ss.getSheetByName(WATCH_MAIL_TAB);
   if (!sh) {
     sh = ss.insertSheet(WATCH_MAIL_TAB);
-    sh.getRange(1, 1, 1, 4).setValues([['시각', '제목', '내용', '메일 보냄']]).setFontWeight('bold');
-    sh.setColumnWidth(3, 520);
+    sh.getRange(1, 1, 1, WATCH_MAIL_HEAD.length).setValues([WATCH_MAIL_HEAD]).setFontWeight('bold');
+    sh.setColumnWidth(5, 520);
   }
   return sh;
 }
 
-/** 아직 안 보낸 줄을 메일로 보내고 D 에 보낸 시각을 적습니다. 여러 건이면 한 통으로. */
+/** 아직 안 보낸 줄을 메일로 보내고 '메일 보냄' 칸에 보낸 시각을 적습니다. 여러 건이면 한 통으로.
+ *  열은 1행 머리글 이름(제목·내용·메일 보냄)으로 찾음 — 열을 옮겨도(2026-10-30 A~D → A~G) 메일이 잘못 나가지 않게. */
 function watchMailQueue_() {
   const email = PropertiesService.getScriptProperties().getProperty('WATCH_EMAIL');
   const lock = LockService.getScriptLock();       // 프로그램이 동시에 줄을 붙이는 것과 겹치지 않게
@@ -83,20 +85,25 @@ function watchMailQueue_() {
   try {
     const sh = watchMailTab_();
     const last = sh.getLastRow();
+    const width = Math.max(sh.getLastColumn(), 4);
+    const head = sh.getRange(1, 1, 1, width).getDisplayValues()[0].map(function (x) { return String(x).trim(); });
+    const T = head.indexOf('제목'), B = head.indexOf('내용'), S = head.indexOf('메일 보냄');
+    if (T < 0 || B < 0 || S < 0) { console.error('업로드이력 머리글을 못 찾음: ' + head.join(',')); return; }
+    watchRecolor_(sh, last, width, T);
     if (last < 2 || !email) return;
-    const vals = sh.getRange(2, 1, last - 1, 4).getDisplayValues();
+    const vals = sh.getRange(2, 1, last - 1, width).getDisplayValues();
     const todo = [];
-    vals.forEach(function (r, i) { if (r[1] && !r[3]) todo.push(i); });
+    vals.forEach(function (r, i) { if (r[T] && !r[S]) todo.push(i); });
     if (todo.length) {
       // 실패·오류(⚠️)가 섞여 있으면 제목 앞에 먼저 보이게 — 여러 건이 한 통으로 묶여도 놓치지 않게
-      const bad = todo.filter(function (i) { return vals[i][1].indexOf('⚠️') === 0; });
-      const subject = todo.length === 1 ? vals[todo[0]][1]
-        : (bad.length ? '⚠️ 실패 ' + bad.length + '건 포함 — ' : '') + '강언 알림 ' + todo.length + '건 — ' + vals[todo[todo.length - 1]][1];
-      const body = todo.map(function (i) { return vals[i][1] + '\n' + vals[i][2]; }).join('\n\n────────\n\n');
+      const bad = todo.filter(function (i) { return vals[i][T].indexOf('⚠️') === 0; });
+      const subject = todo.length === 1 ? vals[todo[0]][T]
+        : (bad.length ? '⚠️ 실패 ' + bad.length + '건 포함 — ' : '') + '강언 알림 ' + todo.length + '건 — ' + vals[todo[todo.length - 1]][T];
+      const body = todo.map(function (i) { return vals[i][T] + '\n' + vals[i][B]; }).join('\n\n────────\n\n');
       MailApp.sendEmail(email, subject, body);
       const at = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm');
-      todo.forEach(function (i) { sh.getRange(i + 2, 4).setValue(at); });
-      bad.forEach(function (i) { sh.getRange(i + 2, 1, 1, 4).setBackground('#FBE5E2'); });   // 이력 탭에서 실패 줄을 빨갛게
+      todo.forEach(function (i) { sh.getRange(i + 2, S + 1).setValue(at); });
+      bad.forEach(function (i) { sh.getRange(i + 2, 1, 1, width).setBackground('#FBE5E2'); });   // 이력 탭에서 실패 줄을 빨갛게
     }
     if (last - 1 > WATCH_MAIL_KEEP + 100) sh.deleteRows(2, last - 1 - WATCH_MAIL_KEEP);
   } finally {
@@ -104,7 +111,17 @@ function watchMailQueue_() {
   }
 }
 
-/** 감시 끄기. */
+/** 열을 옮긴 뒤 한 번만: 실패 줄 빨간 배경을 새 열 기준으로 다시 칠함 (예전 칠은 A~D 에만 있었음). */
+function watchRecolor_(sh, last, width, T) {
+  const props = PropertiesService.getScriptProperties();
+  const key = 'WATCH_RECOLOR_' + width;
+  if (props.getProperty(key) || last < 2) return;
+  sh.getRange(2, 1, last - 1, width).setBackground(null);
+  const vals = sh.getRange(2, T + 1, last - 1, 1).getDisplayValues();
+  vals.forEach(function (r, i) { if (String(r[0]).indexOf('⚠️') === 0) sh.getRange(i + 2, 1, 1, width).setBackground('#FBE5E2'); });
+  props.setProperty(key, '1');
+}
+
 function uninstallWatch() {
   ScriptApp.getProjectTriggers()
     .filter(function (t) { return t.getHandlerFunction() === 'watchHeartbeat'; })

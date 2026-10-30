@@ -41,9 +41,23 @@ def telegram_async(text: str):
     threading.Thread(target=telegram, args=(text,), daemon=True).start()
 
 
-# 시트 탭. Watch.gs 가 5분마다 읽어 메일로 보내고 'D 메일 보냄' 에 시각을 적음.
+# 시트 탭. Watch.gs 가 5분마다 읽어 메일로 보내고 '메일 보냄' 칸에 시각을 적음 (열은 머리글 이름으로 찾음).
 # 2026-10-12 '알림' -> '강언업로드이력', 2026-10-15 -> '업로드이력' (강남언니·바비톡 같이). Watch.gs 와 같은 이름이어야 함.
 MAIL_TAB = "업로드이력"
+
+
+MAIL_HEAD = ["시각", "앱", "로테이션", "제목", "내용", "URL", "메일 보냄"]     # 2026-10-30 요청 (예전: 시각|제목|내용|메일 보냄)
+
+
+def history_row(at: str, title: str, body: str, sent: str = "") -> list[str]:
+    """'업로드이력' 한 줄: 시각 | 앱(강남언니/바비톡) | 로테이션 | 제목 | 내용 | URL(강남언니 글) | 메일 보냄.
+    앱·로테이션·URL 은 알림 제목·내용에서 뽑음 (예전 이력을 바꿀 때도 같은 규칙)."""
+    import re
+    text = f"{title}\n{body}"
+    app = "바비톡" if "바비톡" in title else "강남언니" if ("강남언니" in text or "로테" in body or "unni.app" in body) else ""
+    rot = re.search(r"로테\s*(\d+)", text)
+    url = re.search(r"https?://(?:www\.)?unni\.app/community/\d+", body)
+    return [at, app, rot.group(1) if rot and app == "강남언니" else "", title, body, url.group(0) if url else "", sent]
 
 
 def queue_mail(title: str, body: str) -> bool:
@@ -52,7 +66,7 @@ def queue_mail(title: str, body: str) -> bool:
     try:
         from datetime import datetime
         from core.sheet import Sheet
-        Sheet().append(MAIL_TAB, [[datetime.now().strftime("%Y-%m-%d %H:%M:%S"), title, body, ""]], text=True)
+        Sheet().append(MAIL_TAB, [history_row(datetime.now().strftime("%Y-%m-%d %H:%M:%S"), title, body)], text=True)
         return True
     except Exception:                                   # noqa: BLE001 — 탭이 아직 없으면 등
         return False
