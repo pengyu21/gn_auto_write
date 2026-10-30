@@ -90,6 +90,7 @@ function watchMailQueue_() {
     const T = head.indexOf('제목'), B = head.indexOf('내용'), S = head.indexOf('메일 보냄');
     if (T < 0 || B < 0 || S < 0) { console.error('업로드이력 머리글을 못 찾음: ' + head.join(',')); return; }
     watchRecolor_(sh, last, width, T);
+    watchDateCols_(sh, last, head);
     if (last < 2 || !email) return;
     const vals = sh.getRange(2, 1, last - 1, width).getDisplayValues();
     const todo = [];
@@ -109,6 +110,28 @@ function watchMailQueue_() {
   } finally {
     lock.releaseLock();
   }
+}
+
+/** '시각'·'메일 보냄' 열을 날짜 값 + 날짜 서식으로 (2026-10-30 요청). PC 는 글자로 적으므로
+ *  ('='·'+' 로 시작하는 내용이 수식이 되지 않게) 여기서 'yyyy-MM-dd HH:mm(:ss)' 글자만 날짜로 바꿈. */
+const WATCH_DATE_COLS = {'시각': 'yyyy-mm-dd hh:mm:ss', '메일 보냄': 'yyyy-mm-dd hh:mm'};
+function watchDateCols_(sh, last, head) {
+  if (last < 2) return;
+  const tz = Session.getScriptTimeZone();
+  Object.keys(WATCH_DATE_COLS).forEach(function (name) {
+    const c = head.indexOf(name);
+    if (c < 0) return;
+    const rng = sh.getRange(2, c + 1, last - 1, 1);
+    const vals = rng.getValues();
+    let changed = false;
+    vals.forEach(function (r) {
+      const s = typeof r[0] === 'string' ? r[0].trim() : '';
+      const m = s.match(/^(\d{4}-\d{2}-\d{2} \d{2}:\d{2})(:\d{2})?$/);
+      if (m) { r[0] = Utilities.parseDate(m[1] + (m[2] || ':00'), tz, 'yyyy-MM-dd HH:mm:ss'); changed = true; }
+    });
+    if (changed) rng.setValues(vals);
+    sh.getRange(2, c + 1, sh.getMaxRows() - 1, 1).setNumberFormat(WATCH_DATE_COLS[name]);
+  });
 }
 
 /** 열을 옮긴 뒤 한 번만: 실패 줄 빨간 배경을 새 열 기준으로 다시 칠함 (예전 칠은 A~D 에만 있었음). */
