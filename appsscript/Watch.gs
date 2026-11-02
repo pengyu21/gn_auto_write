@@ -134,15 +134,21 @@ function watchDateCols_(sh, last, head) {
   });
 }
 
-/** 열을 옮긴 뒤 한 번만: 실패 줄 빨간 배경을 새 열 기준으로 다시 칠함 (예전 칠은 A~D 에만 있었음). */
+/** 줄 배경을 제목에 맞춤: '⚠️' 로 시작하면 빨강, 아니면 없음. 매번 확인 — 열을 옮기거나
+ *  실패 줄을 나중에 성공으로 고쳐도(2026-11-03 74·75번 다시 올림) 배경이 따라옴. 바뀐 칸이 있을 때만 씀. */
 function watchRecolor_(sh, last, width, T) {
-  const props = PropertiesService.getScriptProperties();
-  const key = 'WATCH_RECOLOR_' + width;
-  if (props.getProperty(key) || last < 2) return;
-  sh.getRange(2, 1, last - 1, width).setBackground(null);
-  const vals = sh.getRange(2, T + 1, last - 1, 1).getDisplayValues();
-  vals.forEach(function (r, i) { if (String(r[0]).indexOf('⚠️') === 0) sh.getRange(i + 2, 1, 1, width).setBackground('#FBE5E2'); });
-  props.setProperty(key, '1');
+  if (last < 2) return;
+  const rng = sh.getRange(2, 1, last - 1, width);
+  const now = rng.getBackgrounds();
+  const titles = sh.getRange(2, T + 1, last - 1, 1).getDisplayValues();
+  let diff = false;
+  const want = titles.map(function (r, i) {
+    const c = String(r[0]).indexOf('⚠️') === 0 ? '#fbe5e2' : '#ffffff';
+    const row = now[i].map(function () { return c; });
+    if (now[i].some(function (x) { return String(x).toLowerCase() !== c; })) diff = true;
+    return row;
+  });
+  if (diff) rng.setBackgrounds(want);
 }
 
 function uninstallWatch() {
