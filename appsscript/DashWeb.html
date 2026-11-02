@@ -198,6 +198,7 @@ body.readonly #autoBtn{pointer-events:none}
 .logbox .ln.err{color:var(--fail);font-weight:600} .logbox .ln.ok{color:var(--ok);font-weight:600} .logbox .ln.info{color:var(--run)}
 .logbox .empty-log{color:var(--muted);padding:8px 0}
 .btn.tiny{padding:2px 9px;font-size:12px}
+.readline{flex:none;margin-top:6px;font-size:11.5px;color:var(--muted);font-family:var(--f-num)}  /* 시트 읽은 시각 (로그 대신) */
 .btn.tiny[aria-pressed="true"]{background:var(--fail-bg);border-color:var(--fail);color:var(--fail)}
 /* 좁은 화면(노트북 세로·폰): 한 줄로 쌓고 칸 높이는 내용대로 */
 @media (max-width:1100px){.quad{grid-template-columns:minmax(0,1fr)}.logpanel{height:360px}}
@@ -331,6 +332,7 @@ h4{margin:0 0 6px;font-size:13px;color:var(--muted);font-weight:600}
           <button class="btn tiny" id="logOnlyBad" type="button" aria-pressed="false">문제만</button>
         </div></div>
       <div class="logbox" id="log" aria-live="polite"></div>
+      <div class="readline" id="sheetRead"></div>
     </section>
   </div>
 </div>
@@ -408,6 +410,7 @@ const webApi = {
     return Object.assign({}, (SNAP.babi || {}).auto, {enabled: on}); },
   babi_run_now: async key => { await sendCmd('babi_run_now', key); return 'PC 로 보냄 — 30초 안에 시작합니다'; },
   babi_check_login: async nos => { await sendCmd('babi_check_login', (nos || []).join(',')); return {ok: true}; },
+  sheet_reads: async () => SNAP.reads || {},
 };
 const API = () => IS_WEB ? webApi : pywebview.api;
 // 지금 고른 앱의 함수: call('month', y, m) → 강남언니는 month, 바비톡은 babi_month
@@ -437,6 +440,7 @@ window.onLog = (line, at) => {
   const t = new Date();
   const text = String(line).replace(/^\s+/, '');
   if (!text) return;
+  if (/^(\[바비톡\] )?시트 '[^']+' \d+행 읽음$/.test(text)) return;   // 예전 '…행 읽음' 줄은 안 보임 (아래 '시트 읽음' 한 줄로)
   logLines.push({t: at || `${pad(t.getHours())}:${pad(t.getMinutes())}:${pad(t.getSeconds())}`, line: text, kind: logKind(text)});
   if (logLines.length > LOG_MAX) logLines.splice(0, logLines.length - LOG_MAX);
   renderLog();
@@ -449,6 +453,15 @@ $('logApp').querySelectorAll('button').forEach(b => b.onclick = () => {
   renderLog();
 });
 renderLog();
+
+// 시트를 마지막으로 읽은 시각 — 5분마다 '…행 읽음' 로그가 로그 창을 채워서 아래 한 줄로 옮김 (2026-11-03)
+async function renderReads() {
+  try {
+    const r = await API().sheet_reads();
+    const part = (k, name) => r[k] ? `${name} ${String(r[k].at).slice(0, 5)} (${r[k].n}행)` : `${name} 아직 안 읽음`;
+    $('sheetRead').textContent = `시트 읽음 · ${part('unni', '강남언니')} · ${part('babi', '바비톡')}`;
+  } catch (e) { /* 예전 프로그램엔 sheet_reads 가 없음 */ }
+}
 
 function setBusy(text) {
   busy = !!text;
@@ -773,6 +786,7 @@ let lastSheetRead = Date.now();
 async function tick() {
   if (IS_WEB || busy || !today) return;          // 웹앱은 webRefresh 가 대신함
   try { await refreshAuto(); } catch (e) { /* 다음 분에 다시 */ }
+  renderReads();
   try {                                           // 폰보드는 매분 (작업 중 로그인 결과·웹에서 보낸 점검도 바로 보이게)
     const ph = await call('phones');
     if (JSON.stringify(ph) !== JSON.stringify(PH)) { PH = ph; renderBoard(); }
@@ -878,6 +892,7 @@ async function boot() {
     renderTop(); renderDay();
     await refreshAuto();
     renderSync();
+    renderReads();
     $('loading').hidden = true;
   } catch (e) {
     $('loading').textContent = (IS_WEB ? '' : '시트를 읽지 못했습니다: ') + (e && e.message || e);
@@ -906,7 +921,7 @@ async function webRefresh() {
       AUTO_U = SNAP.auto; AUTO_B = (SNAP.babi || {}).auto || null;
       AUTO = isBabi() ? AUTO_B : AUTO_U;
       today = new Date(SNAP.today + 'T00:00:00');
-      await loadMonth(); renderTop(); renderDay(); renderAuto();
+      await loadMonth(); renderTop(); renderDay(); renderAuto(); renderReads();
     }
   } catch (e) { /* 다음 번에 다시 */ }
   renderSync();

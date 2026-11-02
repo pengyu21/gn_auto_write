@@ -165,9 +165,21 @@ class Api:
         sched = getattr(self, "_sched", None)
         if sched:
             sched.invalidate()                         # 스케줄러도 바뀐 시간대로 예정 시각을 다시 정하게
-        if not quiet:
-            self._log(f"시트 '{schedule.TAB}' {len(self._rows)}행 읽음")
+        self._note_read("unni", schedule.TAB, len(self._rows), self._log)
         return len(self._rows)
+
+    def _note_read(self, app: str, tab: str, n: int, log):
+        """시트 읽은 시각은 로그 대신 화면 아래 한 줄로 (5분마다 '…행 읽음' 이 로그 절반을 차지해서, 2026-11-03 요청).
+        줄 수가 바뀌었을 때만(행을 넣거나 뺌) 로그에 남김."""
+        reads = self.__dict__.setdefault("_reads", {})
+        prev = reads.get(app)
+        reads[app] = {"at": datetime.now().strftime("%H:%M:%S"), "n": n, "tab": tab}
+        if prev is not None and prev.get("n") != n:
+            log(f"시트 '{tab}' {prev.get('n')}행 → {n}행 (행 수 바뀜)")
+
+    def sheet_reads(self) -> dict:
+        """{'unni': {at, n, tab}, 'babi': {...}} — 화면 아래 '시트 읽음' 표시용."""
+        return dict(getattr(self, "_reads", {}))
 
     def auto_status(self) -> dict:
         return self._sched.status()
@@ -315,8 +327,7 @@ class Api:
         self._brows = bschedule.load_rows()
         self._brows_at = time.time()
         self._bsched.invalidate()
-        if not quiet:
-            self._blog(f"시트 '{bschedule.TAB}' {len(self._brows)}행 읽음")
+        self._note_read("babi", bschedule.TAB, len(self._brows), self._blog)
         return len(self._brows)
 
     def babi_auto_status(self) -> dict:
@@ -457,7 +468,7 @@ class Api:
         return {"version": VERSION, "today": t.isoformat(), "months": months, "texts": texts,
                 "phones": self.phones(), "auto": self._sched.status(),
                 "babi": {"months": bmonths, "phones": self.babi_phones(), "auto": self._bsched.status()},
-                "logs": list(LOG_BUFFER)[-150:]}
+                "logs": list(LOG_BUFFER)[-150:], "reads": self.sheet_reads()}
 
     def _log(self, line: str):
         # print 는 쓰지 않습니다 — run_state 가 print 를 이 함수로 돌려보내서 무한 반복됩니다.
