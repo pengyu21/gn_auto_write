@@ -66,6 +66,15 @@ def write(board, devs, text_for, category_for, log=print, expect_for=None) -> di
         if d not in front:
             fail(d, "크롬이 앞에 없음")
     screens = close_popups(board, front, quiet=True)
+    # 페이지가 떠도 화면 구조(덤프)에 웹 내용이 늦게 올라오는 폰이 있음 — 프로필도 로그인 버튼도 없으면
+    # 3초 간격으로 20초까지 다시 읽음 (2026-11-02 74·75번: 5초 만에 한 번 읽고 '커뮤니티 화면을 못 읽음' 3번)
+    for _ in range(7):
+        slow = [d for d in front if not (screen.find(screens.get(d.no), rid=site.HOME_PROFILE)
+                                         or screen.find(screens.get(d.no), rid=site.HOME_LOGIN))]
+        if not slow:
+            break
+        time.sleep(3.0)
+        screens.update(close_popups(board, slow, quiet=True))
     live = []
     for d in front:
         xml = screens.get(d.no)
