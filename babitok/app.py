@@ -204,7 +204,14 @@ class App:
                 self.b.shell(f"am start -n {site.MAIN}", self.devs)
                 time.sleep(5)
             xml = self.dump()
-            labels = [n for n in _nodes(xml) if n.get("text") in site.TABS]
+            # 새 앱(7.0.37~): 아래쪽 이름표(desc/text)에 위치가 있으면 그걸 바로 누름
+            for n in _nodes(xml):
+                label = n.get("content-desc") or n.get("text")
+                a = _box(n)
+                if label in site.TAB_ALIASES[name] and _visible(n) and a[1] > 1550 and a[2] - a[0] < 260 and a[3] - a[1] < 130:
+                    self.tap(n, 3.0)
+                    return True
+            labels = [n for n in _nodes(xml) if n.get("text") in site.ALL_TAB_NAMES]
             if len(labels) >= 5:
                 rows = {}
                 for n in _nodes(xml):
@@ -335,7 +342,8 @@ class App:
         edits = []
         for _ in range(5):                              # 네이버 앱 로그인 화면 (또는 바로 바비톡으로 돌아옴)
             xml = self.dump()
-            if self.find(xml, text="MY 바비톡"):         # 네이버 앱에 로그인된 계정으로 입력 없이 바로 들어옴 (10/30 84번)
+            if any(self.find(xml, text=t) or self.find(xml, desc=t) for t in site.TAB_ALIASES["MY 바비톡"]):
+                # 네이버 앱에 로그인된 계정으로 입력 없이 바로 들어옴 (10/30 84번)
                 self.log(f"  {self.dev.no}: 네이버 앱에 로그인된 계정으로 바로 들어감 (아이디는 바비톡 화면에 안 나옴)")
                 self.close_popups()
                 return "ok"

@@ -14,6 +14,10 @@ MAIN = f"{PKG}/.activity.SplashActivity"
 
 # 아래 탭: 글자 순서 = 칸 순서
 TABS = ["홈", "전체 서비스", "커뮤니티", "찜", "MY 바비톡"]
+# 앱 7.0.37(2026-11-03 72번 등)부터 아래 탭 이름이 바뀜: 홈·전체·커뮤니티·찜·마이 — 이름표(content-desc)에 위치도 있어 바로 누름
+TAB_ALIASES = {"홈": ("홈",), "전체 서비스": ("전체 서비스", "전체"), "커뮤니티": ("커뮤니티",),
+               "찜": ("찜",), "MY 바비톡": ("MY 바비톡", "마이")}
+ALL_TAB_NAMES = {a for names in TAB_ALIASES.values() for a in names}
 
 # 커뮤니티
 WRITE_BUTTON = "글쓰기"                         # text
