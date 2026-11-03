@@ -29,7 +29,7 @@ BEAT_EVERY = 300
 SHEET_EVERY = 600
 BEAT_CELL = "M1"
 NICK_UNTIL_HOUR = 6           # 매달 1일 0시~6시 사이에 닉네임 바꾸기
-VERSION_EVERY = 6 * 3600      # 바비톡 앱 버전 확인 간격 (새 버전이 보이면 알림 — versions.py)
+VERSION_HOUR = 0              # 바비톡 앱 버전 확인: 매일 0시대 한 번 (글쓰기 작업이 없는 시간, 2026-11-03 요청)
 
 
 class BabiScheduler:
@@ -147,7 +147,7 @@ class BabiScheduler:
     def _tick(self):
         now = datetime.now()
         self._heartbeat(now)
-        self._version_check()
+        self._version_check(now)
         if not self.enabled:
             return
         self._monthly_nickname(now)
@@ -221,15 +221,18 @@ class BabiScheduler:
         threading.Thread(target=work, daemon=True, name=f"babi-{j.board}").start()
 
     # -- 매달 닉네임 바꾸기 ----------------------------------------------------------------
-    def _version_check(self):
-        """6시간마다 40대의 바비톡 앱 버전을 읽어 처음 보는 버전이면 알림 (화면은 안 건드림, 따로 스레드)."""
-        if time.time() - getattr(self, "_version_at", 0) < VERSION_EVERY:
+    def _version_check(self, now: datetime):
+        """매일 0시대에 한 번 40대의 바비톡 앱 버전을 읽어 처음 보는 버전이면 알림 (화면은 안 건드림, 따로 스레드).
+        그 시간에 PC 가 꺼져 있었으면 그날은 건너뜀."""
+        if now.hour != VERSION_HOUR:
             return
-        self._version_at = time.time()
+        from . import versions
+        if getattr(self, "_version_day", None) == now.date() or versions.load().get("checked", "")[:10] == f"{now:%Y-%m-%d}":
+            return
+        self._version_day = now.date()
 
         def work():
             try:
-                from . import versions
                 versions.check(notify=notify.both_async, log=self.log)
             except Exception as exc:                 # noqa: BLE001
                 self.log(f"!! 바비톡 앱 버전 확인 실패: {exc}")
