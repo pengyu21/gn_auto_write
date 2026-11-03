@@ -9,6 +9,7 @@ login_attempts.json
 babi_state.json
 run_plan_babi.json
 babi_nicks.json
+app_versions.json
 # 폰 시리얼 -> 번호 표
 roster.csv
 # 실행 기록 / 키보드 백업 (PC 마다 다름)

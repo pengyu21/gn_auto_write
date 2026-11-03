@@ -29,6 +29,7 @@ BEAT_EVERY = 300
 SHEET_EVERY = 600
 BEAT_CELL = "M1"
 NICK_UNTIL_HOUR = 6           # 매달 1일 0시~6시 사이에 닉네임 바꾸기
+VERSION_EVERY = 6 * 3600      # 바비톡 앱 버전 확인 간격 (새 버전이 보이면 알림 — versions.py)
 
 
 class BabiScheduler:
@@ -146,6 +147,7 @@ class BabiScheduler:
     def _tick(self):
         now = datetime.now()
         self._heartbeat(now)
+        self._version_check()
         if not self.enabled:
             return
         self._monthly_nickname(now)
@@ -219,6 +221,20 @@ class BabiScheduler:
         threading.Thread(target=work, daemon=True, name=f"babi-{j.board}").start()
 
     # -- 매달 닉네임 바꾸기 ----------------------------------------------------------------
+    def _version_check(self):
+        """6시간마다 40대의 바비톡 앱 버전을 읽어 처음 보는 버전이면 알림 (화면은 안 건드림, 따로 스레드)."""
+        if time.time() - getattr(self, "_version_at", 0) < VERSION_EVERY:
+            return
+        self._version_at = time.time()
+
+        def work():
+            try:
+                from . import versions
+                versions.check(notify=notify.both_async, log=self.log)
+            except Exception as exc:                 # noqa: BLE001
+                self.log(f"!! 바비톡 앱 버전 확인 실패: {exc}")
+        threading.Thread(target=work, daemon=True, name="babi-version").start()
+
     def _monthly_nickname(self, now: datetime):
         """매달 1일 0시(말일이 끝나는 밤 12시)부터 새벽 6시 안에 한 번: 40대 닉네임을 겹치지 않는 새 이름으로.
         (2026-10-16 요청: 한 달에 한 번, 1일 0시)"""
