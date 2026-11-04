@@ -130,6 +130,16 @@ def run_row(j: schedule.Job, rows, header, sheet: Sheet, log=print) -> dict:
         app.launch()
         if not app.in_front():
             raise _Fail("바비톡 앱이 안 뜸")
+        if app.login_screen():
+            # 로그아웃돼 있으면 '바비톡아이디' 시트 계정으로 로그인해 봄. 안 되면 이유를 남김 (2026-11-04 요청, 11/03 75번)
+            a = accounts().get(j.board)
+            if not a:
+                raise _Fail("로그아웃 — '바비톡아이디' 시트에 이 폰 계정이 없어 로그인 못 함")
+            log(f"  {j.board}: 로그아웃 상태 — 시트 계정({a['id'][:3]}***{', 네이버' if a['naver'] else ''})으로 로그인 시도")
+            r = app.switch_account(a["id"], a["pw"], naver=a["naver"])
+            if r.startswith("fail"):
+                raise _Fail(f"로그아웃 — 자동 로그인 실패: {r[5:].strip()}")
+            log(f"  {j.board}: 로그인됨")
 
         # 지난 글을 지우기 전에, 이 계정이 지금 글을 쓸 수 있는지(본인인증 창이 안 뜨는지) 먼저 확인
         r = app.can_write()
@@ -255,6 +265,14 @@ def check_login(no: int, log=print) -> dict:
     app.launch()
     if not app.in_front():
         return {"state": "unknown", "nick": "", "why": "바비톡 앱이 안 뜸"}
+    if app.login_screen():                              # 로그아웃이면 시트 계정으로 로그인해 보고, 안 되면 이유를 칸에
+        a = accounts().get(no)
+        if not a:
+            return {"state": "out", "nick": "", "why": "로그아웃 — '바비톡아이디' 시트에 이 폰 계정이 없음"}
+        r = app.switch_account(a["id"], a["pw"], naver=a["naver"])
+        if r.startswith("fail"):
+            return {"state": "out", "nick": "", "why": f"로그아웃 — 자동 로그인 실패: {r[5:].strip()}"}
+        log(f"  {no}: 로그아웃이라 시트 계정으로 다시 로그인함")
     r = app.open_write()                                # 팝업은 닫으면서 커뮤니티 > 글쓰기
     prev = load_state().get(str(no), {})
     if r == "verify":

@@ -204,6 +204,8 @@ class App:
                 self.b.shell(f"am start -n {site.MAIN}", self.devs)
                 time.sleep(5)
             xml = self.dump()
+            if self.login_screen(xml):                  # 로그아웃 상태엔 아래 탭이 없음 — '뒤로' 를 누르면 앱이 꺼지므로 바로 그만 (11/03 75번)
+                return False
             # 새 앱(7.0.37~): 아래쪽 이름표(desc/text)에 위치가 있으면 그걸 바로 누름
             for n in _nodes(xml):
                 label = n.get("content-desc") or n.get("text")
