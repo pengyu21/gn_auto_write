@@ -231,6 +231,15 @@ class App:
         return False
 
     # -- 계정 바꾸기 (로그아웃 → 이메일 로그인) — 2026-10-19 75번 실측 ---------------------------
+    def logged_in(self, xml=None) -> bool:
+        """바비톡 화면에 아래 탭이 있으면 로그인된 것. 예전 앱(7.0.36 이하)은 탭 글자에 위치가 없어
+        '보이는 글자' 로 찾으면 못 찾음 — 위치와 상관없이 탭 이름 글자/이름표가 있는지로 봄 (11/05 84번)."""
+        xml = xml if xml is not None else self.dump()
+        if site.PKG not in xml or self.login_screen(xml):
+            return False
+        names = {n.get("text") for n in _nodes(xml)} | {n.get("content-desc") for n in _nodes(xml)}
+        return len(names & site.ALL_TAB_NAMES) >= 4
+
     def login_screen(self, xml=None) -> bool:
         """로그아웃 상태의 시작 화면('이메일로 시작하기') 이나 이메일 입력 화면인가."""
         xml = xml if xml is not None else self.dump()
@@ -342,9 +351,9 @@ class App:
         xml = self.dump()
         self.tap(self.find(xml, desc=site.NAVER_LOGIN) or self.find(xml, text=site.NAVER_LOGIN), 5.0)
         edits = []
-        for _ in range(5):                              # 네이버 앱 로그인 화면 (또는 바로 바비톡으로 돌아옴)
+        for _ in range(10):                             # 네이버 앱 로그인 화면 (또는 바로 바비톡으로 돌아옴) — 20초까지
             xml = self.dump()
-            if any(self.find(xml, text=t) or self.find(xml, desc=t) for t in site.TAB_ALIASES["MY 바비톡"]):
+            if self.logged_in(xml):
                 # 네이버 앱에 로그인된 계정으로 입력 없이 바로 들어옴 (10/30 84번)
                 self.log(f"  {self.dev.no}: 네이버 앱에 로그인된 계정으로 바로 들어감 (아이디는 바비톡 화면에 안 나옴)")
                 self.close_popups()
