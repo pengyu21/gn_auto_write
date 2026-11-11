@@ -243,7 +243,8 @@ class App:
     def login_screen(self, xml=None) -> bool:
         """로그아웃 상태의 시작 화면('이메일로 시작하기') 이나 이메일 입력 화면인가."""
         xml = xml if xml is not None else self.dump()
-        return bool(self.find(xml, text="이메일로 시작하기") or self.find(xml, rid=f"{site.PKG}:id/input_login_email"))
+        return bool(any(self.find(xml, text=t) for t in site.EMAIL_START) or self.find(xml, text=site.OTHER_LOGIN)
+                    or self.find(xml, rid=f"{site.PKG}:id/input_login_email"))
 
     def current_account(self) -> str:
         """MY 바비톡 > 사람 아이콘 > 마이페이지의 가입 아이디(메일). 로그아웃이면 ''."""
@@ -295,7 +296,7 @@ class App:
             xml = self.dump()
             if self.find(xml, rid=email_rid):
                 break
-            n = self.find(xml, text="이메일로 시작하기")
+            n = next((x for x in (self.find(xml, text=t) for t in site.EMAIL_START) if x), None)
             if n:
                 self.tap(n, 3.0)
             else:

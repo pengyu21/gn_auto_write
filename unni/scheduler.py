@@ -34,6 +34,7 @@ PREP_LEAD = timedelta(minutes=10)
 BEAT_EVERY = 300                # 생존 신호 간격(초)
 SHEET_EVERY = 600               # 시트 다시 읽는 간격(초) — 실행 직전에는 따로 다시 읽음
 PREP_DAYS = 2                   # 미리 로그인 범위: 오늘·내일·모레 (2026-10-15 요청, 전엔 내일까지)
+PREP_OFFLINE_WAIT = 1800        # 미리 로그인 때 인터넷이 없으면 이만큼(초) 쉬었다 다시
 MAX_PREP = 3                    # 미리 로그인 동시에 몇 대까지
 BEAT_CELL = "M1"
 
@@ -311,7 +312,9 @@ class Scheduler:
             if prepped.get(str(no)) == tag or self.occupied(no) or running >= MAX_PREP:
                 continue
             if self._plan.get("prep_failed", {}).get(str(no)) == tag:
-                continue                                # 이 작업용 미리 로그인은 이미 실패 — 작업 시각에 작업이 직접 다시 함
+                continue
+            if time.time() < getattr(self, "_prep_offline", {}).get(no, 0):
+                continue                                # 인터넷 없어 건너뛴 폰은 30분 뒤에 다시 봄                                # 이 작업용 미리 로그인은 이미 실패 — 작업 시각에 작업이 직접 다시 함
             running += 1
             self._start_prep(j, tag)
 
@@ -330,7 +333,9 @@ class Scheduler:
                 board = Board()
                 devs = board.select([j.board])
                 if not devs or login.offline(board, devs):
-                    self.log(f"  {j.board}번 미리 로그인 건너뜀 (연결/인터넷 없음)")
+                    # 예전엔 20~40초마다 다시 보고 같은 줄을 찍음 (11/10~11 84번 이틀에 2,972줄) → 30분 쉬었다 다시
+                    self.__dict__.setdefault("_prep_offline", {})[j.board] = time.time() + PREP_OFFLINE_WAIT
+                    self.log(f"  {j.board}번 미리 로그인 건너뜀 (연결/인터넷 없음) — {PREP_OFFLINE_WAIT // 60}분 뒤 다시 확인")
                     return
                 self.log(f"{j.board}번 미리 로그인 → 로테 {j.rotation} ({tag} 작업용)")
                 r = login.switch(board, devs[0], account, log=self.log)

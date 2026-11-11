@@ -51,6 +51,8 @@ ONBOARD_SKIP = "아직 고민 중이에요"
 # 네이버 로그인 (2026-10-19 84번 실측): 시작 화면 '다른 방법으로 시작하기' → '네이버 로그인'(desc) →
 # 네이버 앱(com.nhn.android.search) 화면의 EditText 2개(아이디·비밀번호) → '로그인'. 아이디는 @naver.com 뺀 앞부분.
 OTHER_LOGIN = "다른 방법으로 시작하기"
+# 이메일 로그인 버튼 이름: 7.0.36 '이메일로 시작하기' → 7.0.37 '이메일로 로그인하기' (2026-11-11 75번)
+EMAIL_START = ("이메일로 시작하기", "이메일로 로그인하기")
 NAVER_LOGIN = "네이버 로그인"
 NAVER_PKG = "com.nhn.android.search"
 

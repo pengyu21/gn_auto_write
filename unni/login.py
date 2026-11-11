@@ -257,6 +257,19 @@ def step_form(board, devs, accounts, status) -> list:
         if squeezed:
             keyboard.hide(board, squeezed)
             screens.update(screen.dump(board, squeezed))
+        # 2단계 로그인 화면(2026-11-11 77번부터): 이메일만 있고 '다음' → 비밀번호 화면(?step=password).
+        # 비밀번호 칸이 아직 없으면 '다음'(같은 SUBMIT 버튼)을 눌러 넘어감
+        two_step = [d for d in ok if not screen.point(screens.get(d.no), rid=site.PASSWORD)
+                    and (screen.point(screens.get(d.no), rid=site.SUBMIT) or screen.point(screens.get(d.no), text="다음"))]
+        if two_step:
+            print(f"  2단계 로그인 화면 — '다음' 눌러 비밀번호 화면으로: {sorted(d.no for d in two_step)}")
+            board.tap([(d, *(screen.point(screens.get(d.no), rid=site.SUBMIT) or screen.point(screens.get(d.no), text="다음")))
+                       for d in two_step])
+            for _ in range(4):
+                time.sleep(2.0)
+                screens.update(screen.dump(board, two_step))
+                if all(screen.point(screens.get(d.no), rid=site.PASSWORD) for d in two_step):
+                    break
         taps = []
         for d in ok:
             pt = screen.point(screens.get(d.no), rid=site.PASSWORD)
@@ -280,9 +293,9 @@ def step_form(board, devs, accounts, status) -> list:
             email = screen.find(xml, rid=site.EMAIL)
             pwd = screen.find(xml, rid=site.PASSWORD)
             btn = screen.find(xml, rid=site.SUBMIT)
-            if not (email and btn):
+            if not btn or not (email or pwd):
                 status[d.no] = NO_SCREEN
-            elif email.get("text") != uid(d):
+            elif email is not None and email.get("text") != uid(d):   # 2단계 화면엔 이메일 칸이 없음 (1단계에서 이미 확인)
                 status[d.no] = "fail: 이메일 값 불일치"
             elif pwd is not None and pwd.get("text") and len(pwd.get("text")) != len(pw(d)):
                 status[d.no] = "fail: 비밀번호 길이 불일치"
