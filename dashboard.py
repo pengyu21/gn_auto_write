@@ -30,7 +30,7 @@ from datetime import date, datetime
 
 import webview
 
-from core import control
+from core import control, vpn
 from core.board import ROOT, load_settings
 from core.board import Board
 from unni import job, login, notify, schedule
@@ -118,6 +118,13 @@ def babi_steps(j: bschedule.Job, state: str) -> list[dict]:
     return [s("로그인 확인", "wait"), s("지난 글 삭제", "wait"), s("새 글 업로드", "wait")]
 
 
+def _with_vpn(phones: dict) -> dict:
+    """폰보드 칸에 'VPN 점검 필요' (최근 3일 3번 이상 VPN 끊김) 를 덧붙임 — 로그인 상태와 따로 (core/vpn.py)."""
+    for no, f in vpn.flagged().items():
+        phones.setdefault(str(no), {"state": "unknown", "nick": "", "why": ""})["vpn"] = f["why"]
+    return phones
+
+
 class Api:
     def __init__(self):
         self._window = None
@@ -159,7 +166,7 @@ class Api:
 
     def phones(self) -> dict:
         # 작업 중 로그인(unni/login._record_state)이 남긴 칸엔 짧은 말이 없어 여기서 붙임
-        return {str(k): dict(v, tag=v.get("tag") or _tag(v.get("why", ""))) for k, v in load_state().items()}
+        return _with_vpn({str(k): dict(v, tag=v.get("tag") or _tag(v.get("why", ""))) for k, v in load_state().items()})
 
     def reload(self, quiet: bool = False) -> int:
         self._rows = schedule.load_rows()
@@ -348,7 +355,7 @@ class Api:
                 "offset": bschedule.first_offset(year, month), "days": days}
 
     def babi_phones(self) -> dict:
-        return {k: dict(v, tag=v.get("tag") or _tag(v.get("why", ""))) for k, v in bjob.load_state().items()}
+        return _with_vpn({k: dict(v, tag=v.get("tag") or _tag(v.get("why", ""))) for k, v in bjob.load_state().items()})
 
     def babi_reload(self, quiet: bool = False) -> int:
         self._brows = bschedule.load_rows()

@@ -96,6 +96,7 @@ def ensure_online(board, devs, log=print, fixed: list | None = None) -> list:
             still.append(d)
             continue
         log(f"  {d.no}: 인터넷 안 됨 ({why}) — OpenVPN 다시 연결 시도")
+        record_drop(d.no, log=log)
         try:
             r = reconnect(board, d, log=log)
         except Exception as exc:                    # noqa: BLE001
@@ -106,3 +107,85 @@ def ensure_online(board, devs, log=print, fixed: list | None = None) -> list:
         elif fixed is not None:
             fixed.append(d)
     return still
+
+
+# -- VPN 끊김 기록 · 'VPN 점검 필요' (2026-11-12 요청) -------------------------------------------
+# 인터넷이 VPN 때문에 끊긴 걸 볼 때마다 폰별로 시각을 남김(같은 작업의 재시도처럼 20분 안에 또 보면 한 번으로).
+# 최근 FLAG_DAYS 일 안에 FLAG_COUNT 번 이상이면 'VPN 점검 필요' — 폰보드 칸·문제 폰 목록에 표시, 처음 되면 하루 한 번 알림.
+import json as _json
+import threading as _threading
+from datetime import datetime as _dt, timedelta as _td
+
+from .board import ROOT as _ROOT
+
+LOG = _ROOT / "vpn_drops.json"      # {"drops": {폰: ["YYYY-MM-DD HH:MM", …]}, "alerted": {폰: "YYYY-MM-DD"}}
+FLAG_DAYS = 3
+FLAG_COUNT = 3
+SAME_EVENT_MIN = 20                  # 같은 작업의 재시도(5분 간격 3번 ≈ 11분)는 한 번으로
+_LOGLOCK = _threading.Lock()
+
+
+def _read() -> dict:
+    try:
+        return _json.loads(LOG.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+
+
+def _recent(times, now=None):
+    now = now or _dt.now()
+    out = []
+    for t in times:
+        try:
+            if now - _dt.strptime(t, "%Y-%m-%d %H:%M") <= _td(days=FLAG_DAYS):
+                out.append(t)
+        except ValueError:
+            pass
+    return out
+
+
+def record_drop(no: int, log=print):
+    """폰 no 의 VPN 끊김을 한 번 기록. 기준을 처음 넘으면 텔레그램·메일 (폰마다 하루 한 번)."""
+    now = _dt.now()
+    with _LOGLOCK:
+        d = _read()
+        drops = d.setdefault("drops", {})
+        times = _recent(drops.get(str(no), []), now)
+        seen = d.setdefault("seen", {})
+        last = seen.get(str(no))
+        seen[str(no)] = now.strftime("%Y-%m-%d %H:%M")
+        if last and now - _dt.strptime(last, "%Y-%m-%d %H:%M") < _td(minutes=SAME_EVENT_MIN):
+            try:                                     # 같은 끊김(재시도 등) — 한 번으로. 마지막으로 '본' 시각만 갱신
+                LOG.write_text(_json.dumps(d, ensure_ascii=False, indent=1), encoding="utf-8")
+            except OSError:
+                pass
+            return
+        times.append(now.strftime("%Y-%m-%d %H:%M"))
+        drops[str(no)] = times
+        alert = len(times) >= FLAG_COUNT and d.setdefault("alerted", {}).get(str(no)) != now.strftime("%Y-%m-%d")
+        if alert:
+            d["alerted"][str(no)] = now.strftime("%Y-%m-%d")
+        try:
+            LOG.write_text(_json.dumps(d, ensure_ascii=False, indent=1), encoding="utf-8")
+        except OSError:
+            pass
+    if alert:
+        log(f"!! {no}번 VPN 점검 필요 — 최근 {FLAG_DAYS}일 {len(times)}번 끊김")
+        try:
+            from unni import notify
+            notify.both_async(f"📶 VPN 점검 필요 — {no}번",
+                              f"{no}번 폰의 VPN 이 최근 {FLAG_DAYS}일 동안 {len(times)}번 끊겼습니다 ({', '.join(t[5:] for t in times[-5:])}).\n"
+                              f"프로그램이 OpenVPN '다시 연결' 로 이어 가고 있지만, 자주 끊기면 그 폰의 VPN 프로필·서버를 점검해 주세요.")
+        except Exception:                            # noqa: BLE001
+            pass
+
+
+def flagged() -> dict[int, dict]:
+    """{폰: {'count': 최근 끊김 수, 'last': 'MM-DD HH:MM', 'why': 설명}} — 'VPN 점검 필요' 인 폰만."""
+    out = {}
+    for no, times in _read().get("drops", {}).items():
+        t = _recent(times)
+        if len(t) >= FLAG_COUNT:
+            out[int(no)] = {"count": len(t), "last": t[-1][5:],
+                            "why": f"VPN 점검 필요 — 최근 {FLAG_DAYS}일 {len(t)}번 끊김 (마지막 {t[-1][5:]})"}
+    return out

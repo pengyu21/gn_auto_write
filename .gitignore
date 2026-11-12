@@ -34,3 +34,4 @@ dashboard_tk.py
 gas/
 .clasp.json
 pause.json
+vpn_drops.json
