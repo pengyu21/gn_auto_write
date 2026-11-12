@@ -509,8 +509,14 @@ class Api:
     def _log(self, line: str):
         # print 는 쓰지 않습니다 — run_state 가 print 를 이 함수로 돌려보내서 무한 반복됩니다.
         if sys.__stdout__:
-            sys.__stdout__.write(f"{line}\n")
-            sys.__stdout__.flush()
+            # 콘솔이 cp949 면 '—' 같은 글자에서 UnicodeEncodeError 가 나 작업 전체가 멈췄음 (11/12 94번).
+            # 화면 출력은 덤이므로 못 쓰는 글자는 바꿔 쓰고, 그래도 실패하면 무시 (파일·화면 로그는 그대로 남음)
+            try:
+                enc = getattr(sys.__stdout__, "encoding", None) or "utf-8"
+                sys.__stdout__.write(f"{line}\n".encode(enc, "replace").decode(enc, "replace"))
+                sys.__stdout__.flush()
+            except Exception:                               # noqa: BLE001
+                pass
         at = datetime.now().strftime("%H:%M:%S")
         LOG_BUFFER.append((at, str(line)))
         try:
