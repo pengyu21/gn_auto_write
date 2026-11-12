@@ -23,7 +23,7 @@ from __future__ import annotations
 import time
 from datetime import datetime
 
-from core import chrome
+from core import chrome, control
 from core.board import Board
 from core.sheet import Sheet
 from . import login, post, schedule
@@ -100,6 +100,8 @@ def _run(match, label, delete_old, log) -> dict:
     put(status=schedule.RUNNING)
     try:
         return _steps(job, board, devs, dev, idx, put, fail, delete_old, log, t0)
+    except control.Stopped as e:                     # 대시보드 '정지' — 이 작업은 실패로 남기고 끝냄
+        return fail(str(e))
     finally:
         # 작업이 끝나면(성공·실패 모두) 그 폰의 크롬 탭을 모두 닫습니다 — 탭이 계속 쌓여서
         # (사용자 요청 2026-10-10). 로그인은 쿠키라 탭을 닫아도 풀리지 않습니다.
@@ -124,6 +126,7 @@ def _steps(job, board, devs, dev, idx, put, fail, delete_old, log, t0) -> dict:
     log(f"  계정 확인/전환 {time.time() - t0:.0f}초")
 
     # 2. 지난 글
+    control.check("지난 글 삭제")
     if delete_old and job.url:
         log(f"  지난 글 삭제: {job.url}")
         k = post.delete(board, devs, lambda d: job.url, log=log)[job.board]
@@ -133,6 +136,7 @@ def _steps(job, board, devs, dev, idx, put, fail, delete_old, log, t0) -> dict:
             return fail(f"지난 글 삭제 실패 — 새 글 보류 ({k})")
 
     # 3. 새 글 — 닉네임을 아는 계정이면 그 닉네임일 때만 씀
+    control.check("새 글 업로드")
     want = login.known_nicks().get(account["id"], "")
     r = post.write(board, devs, lambda d: job.text, lambda d: job.category, log=log,
                    expect_for=lambda d: want)[job.board]

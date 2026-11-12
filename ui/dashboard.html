@@ -46,13 +46,23 @@ button{font:inherit;color:inherit}
 .sync{font-size:12px;font-weight:600;color:var(--muted);background:var(--panel-2);border:1px solid var(--line);border-radius:999px;padding:4px 10px}
 .sync.stale{color:var(--fail);background:var(--fail-bg);border-color:var(--fail)}
 /* 웹앱 보기 전용(시트 주인이 아닌 사람): 실제로 폰을 움직이는 버튼은 숨김 */
-body.readonly #checkBtn,body.readonly .actions,body.readonly [data-check]{display:none!important}
+body.readonly #checkBtn,body.readonly .actions,body.readonly [data-check],body.readonly .ctl{display:none!important}
 body.readonly #autoBtn{pointer-events:none}
 .busy{color:var(--run);font-weight:600;font-size:13px}
 .btn{border:1px solid var(--line);background:var(--panel-2);border-radius:8px;padding:6px 12px;cursor:pointer;font-weight:500}
 .btn:hover{border-color:var(--accent)}
 .btn:disabled{opacity:.5;cursor:default}
 .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+/* 일시중단·정지 (오른쪽 위, 두 앱 같이) */
+.ctl{font-weight:700}
+.ctl.pause{background:var(--hold-bg);border-color:var(--hold);color:var(--hold)}
+.ctl.resume{background:var(--ok);border-color:var(--ok);color:#fff}
+.ctl.stop{background:var(--panel);border-color:var(--fail);color:var(--fail)}
+.ctl.stop.armed{background:var(--fail);color:#fff}
+.haltbar{display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;padding:9px 16px;border-radius:10px;font-weight:600;
+  background:var(--hold-bg);color:var(--hold);border:1px solid var(--hold)}
+.haltbar.stopped{background:var(--fail-bg);color:var(--fail);border-color:var(--fail)}
+.haltbar small{font-weight:500;color:var(--ink);opacity:.75}
 
 .main{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(0,1fr);gap:14px;align-items:start}
 .panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px;box-shadow:var(--shadow);min-width:0}
@@ -281,8 +291,11 @@ h4{margin:0 0 6px;font-size:13px;color:var(--muted);font-weight:600}
       <button class="auto" id="autoBtn" type="button" title="눌러서 켜기/끄기"><i></i><span id="autoText">자동 실행 …</span></button>
       <button class="btn" id="reloadBtn" type="button">시트 새로고침</button>
       <button class="btn primary" id="checkBtn" type="button">로그인 점검 (전체)</button>
+      <button class="btn ctl pause" id="pauseBtn" type="button" title="두 앱 모두 새 작업을 시작하지 않음 (돌고 있는 작업은 끝까지)">⏸ 일시중단</button>
+      <button class="btn ctl stop" id="stopBtn" type="button" title="돌고 있는 작업도 다음 단계 전에 멈춤">⏹ 정지</button>
     </div>
   </header>
+  <div class="haltbar" id="haltBar" hidden></div>
 
   <!-- 4분할: 위 = 작업 목록 | 폰보드, 아래 = 달력 | 로그. 한 화면에 꽉 차고 칸마다 따로 스크롤 -->
   <div class="quad">
@@ -411,6 +424,10 @@ const webApi = {
   babi_run_now: async key => { await sendCmd('babi_run_now', key); return 'PC 로 보냄 — 30초 안에 시작합니다'; },
   babi_check_login: async nos => { await sendCmd('babi_check_login', (nos || []).join(',')); return {ok: true}; },
   sheet_reads: async () => SNAP.reads || {},
+  control_status: async () => SNAP.control || {},
+  pause: async () => { await sendCmd('pause'); return Object.assign({}, SNAP.control, {paused: true}); },
+  stop: async () => { await sendCmd('stop'); return Object.assign({}, SNAP.control, {paused: true, stopped: true}); },
+  resume: async () => { await sendCmd('resume'); return {paused: false, stopped: false, since: ''}; },
 };
 const API = () => IS_WEB ? webApi : pywebview.api;
 // 지금 고른 앱의 함수: call('month', y, m) → 강남언니는 month, 바비톡은 babi_month
@@ -786,7 +803,7 @@ let lastSheetRead = Date.now();
 async function tick() {
   if (IS_WEB || busy || !today) return;          // 웹앱은 webRefresh 가 대신함
   try { await refreshAuto(); } catch (e) { /* 다음 분에 다시 */ }
-  renderReads();
+  renderReads(); refreshControl();
   try {                                           // 폰보드는 매분 (작업 중 로그인 결과·웹에서 보낸 점검도 바로 보이게)
     const ph = await call('phones');
     if (JSON.stringify(ph) !== JSON.stringify(PH)) { PH = ph; renderBoard(); }
@@ -812,6 +829,45 @@ async function tick() {
 }
 setInterval(tick, 60 * 1000);
 
+// 일시중단·정지 (오른쪽 위) — 두 앱 같이. 상태는 PC 의 pause.json (다시 켜도 유지)
+let CTL = {paused: false, stopped: false, since: ''}, stopArmed = null;
+function renderControl() {
+  const pb = $('pauseBtn'), sb = $('stopBtn'), bar = $('haltBar');
+  pb.textContent = CTL.paused ? '▶ 다시 시작' : '⏸ 일시중단';
+  pb.classList.toggle('pause', !CTL.paused); pb.classList.toggle('resume', CTL.paused);
+  pb.title = CTL.paused ? '자동 실행을 다시 이어 감' : '두 앱 모두 새 작업을 시작하지 않음 (돌고 있는 작업은 끝까지)';
+  sb.disabled = !!CTL.stopped;
+  if (!stopArmed) { sb.textContent = '⏹ 정지'; sb.classList.remove('armed'); }
+  bar.hidden = !CTL.paused;
+  if (typeof renderAuto === 'function' && AUTO) renderAuto();
+  bar.classList.toggle('stopped', !!CTL.stopped);
+  const since = CTL.since ? ` (${CTL.since.slice(5).replace('-', '/')}부터)` : '';
+  bar.innerHTML = CTL.stopped
+    ? `⏹ 정지됨${since}<small>새 작업을 시작하지 않고, 돌던 작업은 다음 단계 전에 멈췄습니다. 지금 실행도 막혀 있습니다. 다시 하려면 오른쪽 위 ▶ 다시 시작.</small>`
+    : `⏸ 일시중단됨${since}<small>강남언니·바비톡 모두 새 작업을 시작하지 않습니다(미리 로그인·닉네임·버전 확인도 쉼). 그동안 지나간 작업은 '미실행'이 되니 다시 시작 뒤 '지금 실행'으로 올리세요.</small>`;
+}
+async function refreshControl() {
+  try { CTL = await API().control_status() || CTL; } catch (e) { /* 예전 프로그램엔 없음 */ }
+  renderControl();
+}
+$('pauseBtn').onclick = async () => {
+  if (!CAN || busy) return;
+  CTL = await API()[CTL.paused ? 'resume' : 'pause']();
+  renderControl(); onAuto();
+};
+$('stopBtn').onclick = async () => {
+  if (!CAN || busy || CTL.stopped) return;
+  const b = $('stopBtn');
+  if (!stopArmed) {                                // 실제로 작업을 멈추므로 한 번 더 확인
+    b.textContent = '정말 정지'; b.classList.add('armed');
+    stopArmed = setTimeout(() => { stopArmed = null; renderControl(); }, 4000);
+    return;
+  }
+  clearTimeout(stopArmed); stopArmed = null;
+  CTL = await API().stop();
+  renderControl(); onAuto();
+};
+
 // 자동 실행 상태
 let AUTO = null;
 function renderAuto() {
@@ -823,7 +879,7 @@ function renderAuto() {
   b.classList.toggle('off-window', AUTO.enabled && !AUTO.today_in_window);
   const busyN = Object.keys(AUTO.busy || {}).length;
   $('autoText').textContent = APP_NAME[APP] + ' ' + (AUTO.enabled ? (AUTO.today_in_window ? '자동 실행 켜짐' : '자동 실행 켜짐 (오늘은 기간 밖)')
-    : '자동 실행 꺼짐') + range + (busyN ? ` · 진행 ${busyN}대` : '');
+    : '자동 실행 꺼짐') + range + (busyN ? ` · 진행 ${busyN}대` : '') + (CTL.paused ? ' · 일시중단 중' : '');
   renderAppTabs();
 }
 // 두 앱 상태를 같이 읽음 — 탭 숫자(오늘 건수)와 '다른 앱이 쓰는 폰' 표시에 씀
@@ -865,7 +921,7 @@ window.onAuto = () => {
   clearTimeout(autoTimer);
   autoTimer = setTimeout(async () => {
     try {
-      await refreshAuto();
+      await refreshAuto(); refreshControl();
       await call('reload', true); lastSheetRead = Date.now();
       await loadMonth();
       PH = await call('phones');
@@ -892,7 +948,7 @@ async function boot() {
     renderTop(); renderDay();
     await refreshAuto();
     renderSync();
-    renderReads();
+    renderReads(); refreshControl();
     $('loading').hidden = true;
   } catch (e) {
     $('loading').textContent = (IS_WEB ? '' : '시트를 읽지 못했습니다: ') + (e && e.message || e);
@@ -921,7 +977,7 @@ async function webRefresh() {
       AUTO_U = SNAP.auto; AUTO_B = (SNAP.babi || {}).auto || null;
       AUTO = isBabi() ? AUTO_B : AUTO_U;
       today = new Date(SNAP.today + 'T00:00:00');
-      await loadMonth(); renderTop(); renderDay(); renderAuto(); renderReads();
+      await loadMonth(); renderTop(); renderDay(); renderAuto(); renderReads(); refreshControl();
     }
   } catch (e) { /* 다음 번에 다시 */ }
   renderSync();

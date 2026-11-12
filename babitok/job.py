@@ -12,6 +12,7 @@ import threading
 import time
 from datetime import datetime
 
+from core import control
 from core.board import ROOT, Board
 from core.sheet import Sheet
 from unni import login as unni_login
@@ -148,6 +149,7 @@ def run_row(j: schedule.Job, rows, header, sheet: Sheet, log=print) -> dict:
         if r != "ok":
             raise _Fail(r[5:].strip())
 
+        control.check("지난 글 삭제")
         prev = schedule.previous_title(rows, j)
         moved = _account_changed(rows, j)
         if prev and moved:
@@ -178,6 +180,7 @@ def run_row(j: schedule.Job, rows, header, sheet: Sheet, log=print) -> dict:
             else:
                 raise _Fail(f"먼저 올린 같은 글 삭제 실패 — {r[5:].strip()} (새 글 보류)")
 
+        control.check("새 글 업로드")
         r = app.write(j.topic, j.title, j.text)
         if r == "verify":
             raise _Verify()
@@ -217,6 +220,8 @@ def run_row(j: schedule.Job, rows, header, sheet: Sheet, log=print) -> dict:
         note_state(j.board, {"state": "out", "nick": "", "why": why, "tag": "본인인증 필요"})
         return result
     except _Fail as e:
+        result["error"] = str(e)
+    except control.Stopped as e:                       # 대시보드 '정지'
         result["error"] = str(e)
     except Exception as e:                             # noqa: BLE001
         result["error"] = f"{type(e).__name__}: {e}"

@@ -17,6 +17,7 @@ import traceback
 from datetime import date, datetime, timedelta
 from typing import Callable, Optional
 
+from core import control
 from core.board import ROOT, load_settings
 from core.sheet import Sheet
 from unni import notify
@@ -147,6 +148,8 @@ class BabiScheduler:
     def _tick(self):
         now = datetime.now()
         self._heartbeat(now)
+        if control.paused():                         # 일시중단·정지: 새 작업·닉네임·버전 확인 안 함 (생존 신호는 계속)
+            return
         self._version_check(now)
         if not self.enabled:
             return

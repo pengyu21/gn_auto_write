@@ -108,6 +108,9 @@ class Remote:
             self.poke()
 
     def _run(self, cmd: str, arg: str) -> str:
+        if cmd in ("pause", "stop", "resume"):          # 오른쪽 위 일시중단 / 정지 / 다시 시작
+            getattr(self.api, cmd)()
+            return {"pause": "일시중단됨", "stop": "정지됨", "resume": "다시 시작함"}[cmd]
         if cmd == "auto":
             st = self.api.set_auto(arg == "on")
             return "자동 실행 " + ("켜짐" if st.get("enabled") else "꺼짐")

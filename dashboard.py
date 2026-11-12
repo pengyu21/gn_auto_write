@@ -30,6 +30,7 @@ from datetime import date, datetime
 
 import webview
 
+from core import control
 from core.board import ROOT, load_settings
 from core.board import Board
 from unni import job, login, notify, schedule
@@ -188,7 +189,33 @@ class Api:
         self._sched.set_enabled(bool(on))
         return self._sched.status()
 
+    # -- 일시중단 / 정지 (오른쪽 위 버튼, 두 앱 같이) ----------------------------------------
+    def control_status(self) -> dict:
+        return control.status()
+
+    def pause(self) -> dict:
+        control.pause()
+        self._log("⏸ 일시중단 — 새 작업을 시작하지 않습니다 (돌고 있는 작업은 끝까지)")
+        self._changed()
+        return control.status()
+
+    def stop(self) -> dict:
+        busy = sorted(set(self._sched.busy) | set(self._bsched.busy))
+        control.stop()
+        self._log("⏹ 정지 — 새 작업 중단, 돌고 있는 작업은 다음 단계 전에 멈춤"
+                  + (f" (지금 작업 중: {busy})" if busy else ""))
+        self._changed()
+        return control.status()
+
+    def resume(self) -> dict:
+        control.resume()
+        self._log("▶ 다시 시작 — 자동 실행을 이어 갑니다 (멈춘 동안 지나간 작업은 '지금 실행' 으로)")
+        self._changed()
+        return control.status()
+
     def run_now(self, key: str) -> str:
+        if control.stop_requested():
+            return "정지 상태입니다 — 오른쪽 위 '다시 시작' 을 누른 뒤 실행하세요"
         r = self._sched.run_now(str(key))
         self._log(f"지금 실행 {key}: {r}")
         return r
@@ -338,6 +365,8 @@ class Api:
         return self._bsched.status()
 
     def babi_run_now(self, key: str) -> str:
+        if control.stop_requested():
+            return "정지 상태입니다 — 오른쪽 위 '다시 시작' 을 누른 뒤 실행하세요"
         r = self._bsched.run_now(str(key))
         self._blog(f"지금 실행 {key}: {r}")
         return r
@@ -468,7 +497,7 @@ class Api:
         return {"version": VERSION, "today": t.isoformat(), "months": months, "texts": texts,
                 "phones": self.phones(), "auto": self._sched.status(),
                 "babi": {"months": bmonths, "phones": self.babi_phones(), "auto": self._bsched.status()},
-                "logs": list(LOG_BUFFER)[-150:], "reads": self.sheet_reads()}
+                "logs": list(LOG_BUFFER)[-150:], "reads": self.sheet_reads(), "control": control.status()}
 
     def _log(self, line: str):
         # print 는 쓰지 않습니다 — run_state 가 print 를 이 함수로 돌려보내서 무한 반복됩니다.

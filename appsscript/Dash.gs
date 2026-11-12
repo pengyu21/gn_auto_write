@@ -20,7 +20,8 @@
 const DASH_TAB = '강언대시보드';
 const DASH_CMD_TAB = '강언대시보드명령';
 const DASH_CMDS = ['auto', 'run_now', 'check_login', 'reload',
-                   'babi_auto', 'babi_run_now', 'babi_check_login', 'babi_reload'];   // 바비톡 탭
+                   'babi_auto', 'babi_run_now', 'babi_check_login', 'babi_reload',    // 바비톡 탭
+                   'pause', 'stop', 'resume'];                                          // 오른쪽 위 일시중단·정지
 
 function doGet(e) {
   return HtmlService.createHtmlOutputFromFile('DashWeb')

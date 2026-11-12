@@ -24,6 +24,7 @@ import traceback
 from datetime import date, datetime, timedelta
 from typing import Callable, Optional
 
+from core import control
 from core.board import ROOT, Board, load_settings
 from core.sheet import Sheet
 from . import job, login, notify, schedule
@@ -55,8 +56,12 @@ def run_with_retry(run, log, who: str) -> dict:
         err = str(r.get("error", ""))
         if r.get("ok") or r.get("skipped") or r.get("posted") or any(w in err for w in NO_RETRY) or n == JOB_TRIES:
             break
+        if control.stop_requested() or "정지됨" in err:   # 대시보드 '정지' — 다시 하지 않음
+            break
         log(f"  {who} 실패 ({err}) — {JOB_RETRY_WAIT // 60}분 뒤 {n + 1}/{JOB_TRIES}번째 다시 시도")
-        time.sleep(JOB_RETRY_WAIT)
+        if control.wait(JOB_RETRY_WAIT):              # 기다리는 중에 '정지' 를 누르면 바로 그만
+            log(f"  {who} 다시 시도 취소 — 대시보드에서 정지")
+            break
     if not r.get("ok") and not r.get("skipped") and r.get("error") and n > 1:
         r["error"] = f"{r['error']} ({n}번 시도)"
     return r
@@ -165,7 +170,7 @@ class Scheduler:
     def _tick(self):
         now = datetime.now()
         self._heartbeat(now)
-        if not self.enabled:
+        if not self.enabled or control.paused():     # 일시중단·정지: 새 작업·미리 로그인 안 함 (생존 신호는 계속)
             return
         today = now.date()
         if not self.in_window(today):
