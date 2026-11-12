@@ -181,6 +181,8 @@ def run_row(j: schedule.Job, rows, header, sheet: Sheet, log=print) -> dict:
                 raise _Fail(f"먼저 올린 같은 글 삭제 실패 — {r[5:].strip()} (새 글 보류)")
 
         control.check("새 글 업로드")
+        if vpn.ensure_online(board, devs, log):        # 올리기 직전에도 확인 — 다시 연결한 VPN 이 금방 또 끊기는 폰이 있음 (11/12 84번)
+            raise _Fail("인터넷 연결 없음 — 글 올리기 직전에 끊김 (VPN 다시 연결해도 안 됨)")
         r = app.write(j.topic, j.title, j.text)
         if r == "verify":
             raise _Verify()

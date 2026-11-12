@@ -137,6 +137,8 @@ def _steps(job, board, devs, dev, idx, put, fail, delete_old, log, t0) -> dict:
 
     # 3. 새 글 — 닉네임을 아는 계정이면 그 닉네임일 때만 씀
     control.check("새 글 업로드")
+    if vpn.ensure_online(board, devs, log):            # 올리기 직전에도 확인 (VPN 이 금방 또 끊기는 폰)
+        return fail("인터넷 연결 없음 — 글 올리기 직전에 끊김 (VPN 다시 연결해도 안 됨)")
     want = login.known_nicks().get(account["id"], "")
     r = post.write(board, devs, lambda d: job.text, lambda d: job.category, log=log,
                    expect_for=lambda d: want)[job.board]
