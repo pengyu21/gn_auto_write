@@ -22,7 +22,8 @@ const WATCH_STALE_MIN = 15;     // 이 시간 넘게 신호가 없으면 멈춘 
 const WATCH_REPEAT_MIN = 60;    // 멈춘 동안 다시 알리는 간격
 const WATCH_EVERY_MIN = 5;      // 확인 간격 (트리거) — 바꾸면 installWatch 를 다시 실행
 const WATCH_MAIL_TAB = '업로드이력';  // 강남언니·바비톡 업로드 완료·실패를 프로그램이 적어 두면 여기서 메일로 보냄 (unni/notify.py MAIL_TAB 과 같은 이름)
-const WATCH_MAIL_KEEP = 500;    // 업로드 이력 탭에 남길 줄 수
+const WATCH_MAIL_KEEP = 500;
+const WATCH_TAG = '[폰보드2]';   // 텔레그램 메시지 머리 — 단톡방에 다른 PC 알림도 같이 옴 (unni/notify.py TELEGRAM_TAG 와 같게)    // 업로드 이력 탭에 남길 줄 수
 
 /** 트리거가 부릅니다: 보낼 메일 처리 + 멈춤 확인. */
 function watchHeartbeat() {
@@ -170,7 +171,7 @@ function watchNotify_(title, body) {
     try {
       UrlFetchApp.fetch('https://api.telegram.org/bot' + token + '/sendMessage', {
         method: 'post', contentType: 'application/json', muteHttpExceptions: true,
-        payload: JSON.stringify({ chat_id: chat, text: title + '\n' + body }),
+        payload: JSON.stringify({ chat_id: chat, text: WATCH_TAG + ' ' + title + '\n' + body }),   // 단톡방에서 어느 PC 인지
       });
     } catch (e) { console.error('텔레그램 실패: ' + e); }
   }

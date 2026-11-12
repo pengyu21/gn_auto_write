@@ -17,6 +17,7 @@ import urllib.request
 from core.board import load_settings
 
 TIMEOUT = 15
+TELEGRAM_TAG = "[폰보드2]"      # 이 PC 의 텔레그램 메시지 머리 (settings.json "telegram_tag" 가 있으면 그 값)
 
 
 def telegram(text: str) -> bool:
@@ -25,6 +26,10 @@ def telegram(text: str) -> bool:
     chat = s.get("telegram_chat_id")
     if not token or not chat:
         return False
+    # 단톡방에 다른 PC 알림도 같이 오므로 어느 PC 인지 앞에 붙임 (2026-11-12 요청). settings.json telegram_tag 로 바꿀 수 있음
+    tag = str(s.get("telegram_tag", TELEGRAM_TAG)).strip()
+    if tag and not text.startswith(tag):
+        text = f"{tag} {text}"
     body = json.dumps({"chat_id": chat, "text": text[:4000],
                        "disable_web_page_preview": True}).encode()
     req = urllib.request.Request(f"https://api.telegram.org/bot{token}/sendMessage", data=body,
