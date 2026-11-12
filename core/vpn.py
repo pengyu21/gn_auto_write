@@ -82,9 +82,11 @@ def reconnect(board, dev, log=print, wait: float = 30.0) -> str:
     return f"fail: VPN 다시 연결했지만 {wait:.0f}초 안에 인터넷이 안 돌아옴"
 
 
-def ensure_online(board, devs, log=print) -> list:
+def ensure_online(board, devs, log=print, fixed: list | None = None) -> list:
     """인터넷이 안 되는 폰만 OpenVPN 다시 연결을 해 보고, 그래도 안 되는 폰 목록을 돌려줌.
-    (Wi-Fi 자체가 끊긴 경우·비행기 모드 등은 VPN 으로 안 되니 그대로 돌려줌)"""
+    (Wi-Fi 자체가 끊긴 경우·비행기 모드 등은 VPN 으로 안 되니 그대로 돌려줌)
+    fixed 를 주면 다시 연결해서 살아난 폰을 거기에 담음 — 그 폰의 앱은 끊기기 전 연결을 붙잡고 있어
+    '통신에 실패했습니다' 가 나므로 앱을 껐다 켜야 함 (2026-11-12 84번 바비톡)."""
     from unni import login
     dead = login.offline(board, devs)
     still = []
@@ -101,4 +103,6 @@ def ensure_online(board, devs, log=print) -> list:
         if r != "ok":
             log(f"  {d.no}: {r[5:].strip()}")
             still.append(d)
+        elif fixed is not None:
+            fixed.append(d)
     return still

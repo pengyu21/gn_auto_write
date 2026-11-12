@@ -125,9 +125,12 @@ def run_row(j: schedule.Job, rows, header, sheet: Sheet, log=print) -> dict:
         if not devs:
             raise _Fail("폰 연결 안 됨 (USB/adb)")
         dev = devs[0]
-        if vpn.ensure_online(board, devs, log):      # 인터넷이 없으면 OpenVPN 다시 연결해 보고, 그래도 안 되면 실패
+        fixed = []
+        if vpn.ensure_online(board, devs, log, fixed):  # 인터넷이 없으면 OpenVPN 다시 연결해 보고, 그래도 안 되면 실패
             raise _Fail("인터넷 연결 없음 — " + unni_login.net_reason(board, dev))
         app = App(board, dev, log=lambda m: log(m))
+        if fixed:                                       # VPN 을 다시 붙였으면 바비톡을 완전히 껐다 켬 (끊긴 연결을 붙잡고 있음)
+            app.restart()
         app.launch()
         if not app.in_front():
             raise _Fail("바비톡 앱이 안 뜸")
@@ -181,8 +184,12 @@ def run_row(j: schedule.Job, rows, header, sheet: Sheet, log=print) -> dict:
                 raise _Fail(f"먼저 올린 같은 글 삭제 실패 — {r[5:].strip()} (새 글 보류)")
 
         control.check("새 글 업로드")
-        if vpn.ensure_online(board, devs, log):        # 올리기 직전에도 확인 — 다시 연결한 VPN 이 금방 또 끊기는 폰이 있음 (11/12 84번)
+        fixed = []
+        if vpn.ensure_online(board, devs, log, fixed):  # 올리기 직전에도 확인 — 다시 연결한 VPN 이 금방 또 끊기는 폰이 있음 (11/12 84번)
             raise _Fail("인터넷 연결 없음 — 글 올리기 직전에 끊김 (VPN 다시 연결해도 안 됨)")
+        if fixed:
+            app.restart()
+            app.launch()
         r = app.write(j.topic, j.title, j.text)
         if r == "verify":
             raise _Verify()
@@ -266,9 +273,12 @@ def check_login(no: int, log=print) -> dict:
     devs = board.select([no])
     if not devs:
         return {"state": "gone", "nick": "", "why": "USB/adb 연결 끊김"}
-    if vpn.ensure_online(board, devs, log):
+    fixed = []
+    if vpn.ensure_online(board, devs, log, fixed):
         return {"state": "unknown", "nick": "", "why": "인터넷 안 됨 — " + unni_login.net_reason(board, devs[0])}
     app = App(board, devs[0], log=log)
+    if fixed:                                           # VPN 다시 붙였으면 바비톡 껐다 켬
+        app.restart()
     app.launch()
     if not app.in_front():
         return {"state": "unknown", "nick": "", "why": "바비톡 앱이 안 뜸"}

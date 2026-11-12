@@ -91,6 +91,12 @@ class App:
         time.sleep(6)
         self.close_popups()
 
+    def restart(self):
+        """바비톡을 완전히 끔 (다음 launch 에서 새로 켜짐). VPN 을 다시 붙인 뒤 끊긴 연결을 버리려고 (11/12 84번)."""
+        self.b.shell(f"am force-stop {site.PKG}", self.devs)
+        time.sleep(1.5)
+        self.log(f"  {self.dev.no}: VPN 다시 연결해서 바비톡을 껐다 켬")
+
     def in_front(self) -> bool:
         out = self.b.shell("dumpsys activity activities | grep -m1 -E 'topResumedActivity|mResumedActivity'",
                            self.devs)[0].stdout
