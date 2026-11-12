@@ -12,7 +12,7 @@ import threading
 import time
 from datetime import datetime
 
-from core import control
+from core import control, vpn
 from core.board import ROOT, Board
 from core.sheet import Sheet
 from unni import login as unni_login
@@ -125,7 +125,7 @@ def run_row(j: schedule.Job, rows, header, sheet: Sheet, log=print) -> dict:
         if not devs:
             raise _Fail("폰 연결 안 됨 (USB/adb)")
         dev = devs[0]
-        if unni_login.offline(board, devs):
+        if vpn.ensure_online(board, devs, log):      # 인터넷이 없으면 OpenVPN 다시 연결해 보고, 그래도 안 되면 실패
             raise _Fail("인터넷 연결 없음 — " + unni_login.net_reason(board, dev))
         app = App(board, dev, log=lambda m: log(m))
         app.launch()
@@ -264,7 +264,7 @@ def check_login(no: int, log=print) -> dict:
     devs = board.select([no])
     if not devs:
         return {"state": "gone", "nick": "", "why": "USB/adb 연결 끊김"}
-    if unni_login.offline(board, devs):
+    if vpn.ensure_online(board, devs, log):
         return {"state": "unknown", "nick": "", "why": "인터넷 안 됨 — " + unni_login.net_reason(board, devs[0])}
     app = App(board, devs[0], log=log)
     app.launch()

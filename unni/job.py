@@ -23,7 +23,7 @@ from __future__ import annotations
 import time
 from datetime import datetime
 
-from core import chrome, control
+from core import chrome, control, vpn
 from core.board import Board
 from core.sheet import Sheet
 from . import login, post, schedule
@@ -91,7 +91,7 @@ def _run(match, label, delete_old, log) -> dict:
     if not devs:
         return fail("폰 연결 안 됨")
     dev = devs[0]
-    if login.offline(board, devs):
+    if vpn.ensure_online(board, devs, log):          # 인터넷이 없으면 OpenVPN 다시 연결해 보고, 그래도 안 되면 실패
         try:
             why = login.net_reason(board, dev)
         except Exception:                            # noqa: BLE001

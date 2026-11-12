@@ -657,7 +657,8 @@ def run(panels: str = "60-99", rotation: int = 1,
                 return status
 
             print("인터넷 연결 점검")
-            dead = offline(board, devs)
+            from core import vpn                    # 인터넷이 없으면 OpenVPN 다시 연결해 보고, 그래도 안 되는 폰만 건너뜀
+            dead = vpn.ensure_online(board, devs, log=print)
             for d in dead:
                 status[d.no] = NO_NET
             if dead:

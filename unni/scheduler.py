@@ -24,7 +24,7 @@ import traceback
 from datetime import date, datetime, timedelta
 from typing import Callable, Optional
 
-from core import control
+from core import control, vpn
 from core.board import ROOT, Board, load_settings
 from core.sheet import Sheet
 from . import job, login, notify, schedule
@@ -337,7 +337,7 @@ class Scheduler:
                     return
                 board = Board()
                 devs = board.select([j.board])
-                if not devs or login.offline(board, devs):
+                if not devs or vpn.ensure_online(board, devs, self.log):        # OpenVPN 다시 연결도 해 봄
                     # 예전엔 20~40초마다 다시 보고 같은 줄을 찍음 (11/10~11 84번 이틀에 2,972줄) → 30분 쉬었다 다시
                     self.__dict__.setdefault("_prep_offline", {})[j.board] = time.time() + PREP_OFFLINE_WAIT
                     self.log(f"  {j.board}번 미리 로그인 건너뜀 (연결/인터넷 없음) — {PREP_OFFLINE_WAIT // 60}분 뒤 다시 확인")
