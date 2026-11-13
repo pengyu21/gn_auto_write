@@ -121,6 +121,7 @@ from .board import ROOT as _ROOT
 LOG = _ROOT / "vpn_drops.json"      # {"drops": {폰: ["YYYY-MM-DD HH:MM", …]}, "alerted": {폰: "YYYY-MM-DD"}}
 FLAG_DAYS = 3
 FLAG_COUNT = 3
+SHOW_HOURS = 24        # 대시보드 표시는 마지막 끊김이 이 시간 안일 때만 (이미 정상인 폰에 며칠씩 떠 있지 않게, 2026-11-13)
 SAME_EVENT_MIN = 20                  # 같은 작업의 재시도(5분 간격 3번 ≈ 11분)는 한 번으로
 _LOGLOCK = _threading.Lock()
 
@@ -181,11 +182,13 @@ def record_drop(no: int, log=print):
 
 
 def flagged() -> dict[int, dict]:
-    """{폰: {'count': 최근 끊김 수, 'last': 'MM-DD HH:MM', 'why': 설명}} — 'VPN 점검 필요' 인 폰만."""
+    """{폰: {'count': 최근 끊김 수, 'last': 'MM-DD HH:MM', 'why': 설명}} — 'VPN 점검 필요' 인 폰만.
+    최근 FLAG_DAYS 일 FLAG_COUNT 번 이상 끊겼고, 마지막 끊김이 SHOW_HOURS 시간 안일 때."""
     out = {}
+    now = _dt.now()
     for no, times in _read().get("drops", {}).items():
-        t = _recent(times)
-        if len(t) >= FLAG_COUNT:
+        t = _recent(times, now)
+        if len(t) >= FLAG_COUNT and now - _dt.strptime(t[-1], "%Y-%m-%d %H:%M") <= _td(hours=SHOW_HOURS):
             out[int(no)] = {"count": len(t), "last": t[-1][5:],
                             "why": f"VPN 점검 필요 — 최근 {FLAG_DAYS}일 {len(t)}번 끊김 (마지막 {t[-1][5:]})"}
     return out
