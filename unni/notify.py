@@ -96,8 +96,10 @@ def queue_mail(title: str, body: str) -> bool:
 
 
 def both_async(title: str, body: str):
-    """텔레그램(바로) + 메일(시트 거쳐 5분 안)."""
+    """텔레그램(바로) + 메일(시트 거쳐 5분 안).
+    업로드 완료(✅)는 텔레그램에 보내지 않음 — 단톡방에는 실패·문제만 (2026-11-13 요청). 메일·업로드이력에는 그대로 남김."""
     def run():
-        telegram(f"{title}\n{body}")
+        if not title.startswith("✅"):
+            telegram(f"{title}\n{body}")
         queue_mail(title, body)
     threading.Thread(target=run, daemon=True).start()

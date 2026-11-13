@@ -227,14 +227,14 @@ class Scheduler:
                     self._notify_success(j, d, r)
                 else:
                     # 실패도 메일로 (2026-10-13 요청) — '업로드이력' 탭에도 한 줄 남아 이력이 됨
-                    notify.both_async("⚠️ 업로드 실패",
+                    notify.both_async("⚠️ 강남언니 업로드 실패",
                                       f"{d:%m/%d}({schedule.day_of(d)}) {where}\n이유: {r.get('error', '')}")
             except Exception as exc:                 # noqa: BLE001
                 self.log(f"!! {j.board}번 작업 중 오류: {type(exc).__name__}: {exc}")
                 traceback.print_exc()
                 if not manual:
                     self._mark(d, k, f"실패: {exc}")
-                notify.both_async("⚠️ 작업 중 오류",
+                notify.both_async("⚠️ 강남언니 작업 중 오류",
                                   f"{d:%m/%d}({schedule.day_of(d)}) {where}\n{type(exc).__name__}: {exc}")
             finally:
                 with self._lock:
@@ -281,7 +281,7 @@ class Scheduler:
             total, nth, row = 0, 0, j
         dn = schedule.day_of(d)
         at = schedule.parse_uploaded(row.uploaded) or datetime.now()
-        title = f"✅ 업로드 완료 — 오늘 {total}건 중 {nth}번째" if total else "✅ 업로드 완료"
+        title = f"✅ 강남언니 업로드 완료 — 오늘 {total}건 중 {nth}번째" if total else "✅ 강남언니 업로드 완료"
         body = (f"{d:%m/%d}({dn}) {j.week}주차 {j.day} {j.hour}시 · {at:%H:%M} 업로드\n"
                 f"{j.board}번 · 로테 {j.rotation} · {j.surgery} [{j.category}]\n"
                 f"글: {r.get('url', '')}\n"
