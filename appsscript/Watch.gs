@@ -94,8 +94,13 @@ function watchMailQueue_() {
     watchDateCols_(sh, last, head);
     if (last < 2 || !email) return;
     const vals = sh.getRange(2, 1, last - 1, width).getDisplayValues();
-    const todo = [];
-    vals.forEach(function (r, i) { if (r[T] && !r[S]) todo.push(i); });
+    const todo = [], quiet = [];
+    // 업로드 완료(✅)는 메일로 보내지 않음 — 실패·문제만 (2026-11-13 요청). 이력에는 남기고 '메일 보냄' 에 '-'
+    vals.forEach(function (r, i) {
+      if (!r[T] || r[S]) return;
+      (String(r[T]).indexOf('✅') === 0 ? quiet : todo).push(i);
+    });
+    quiet.forEach(function (i) { sh.getRange(i + 2, S + 1).setValue('-'); });
     if (todo.length) {
       // 실패·오류(⚠️)가 섞여 있으면 제목 앞에 먼저 보이게 — 여러 건이 한 통으로 묶여도 놓치지 않게
       const bad = todo.filter(function (i) { return vals[i][T].indexOf('⚠️') === 0; });

@@ -66,7 +66,9 @@ def history_fields(at: str, title: str, body: str, sent: str = "") -> dict[str, 
     url = re.search(r"https?://(?:www\.)?unni\.app/community/\d+", body)
     return {"시각": at, "앱": app, "로테이션": rot.group(1) if rot and app == "강남언니" else "",
             "폰보드": no.group(1) if no else "", "제목": title, "내용": body,
-            "URL": url.group(0) if url else "", "메일 보냄": sent}
+            "URL": url.group(0) if url else "",
+            # 업로드 완료(✅)는 메일로 보내지 않음 — '-' 를 적어 Watch.gs 가 건너뜀 (2026-11-13, 텔레그램과 같은 기준)
+            "메일 보냄": sent or ("-" if title.startswith("✅") else "")}
 
 
 def history_row(head: list[str], fields: dict[str, str]) -> list[str]:
