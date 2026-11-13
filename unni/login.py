@@ -434,8 +434,55 @@ def _record_attempt(no: int, account_id: str, result: str):
         pass
 
 
-LOGIN_TRIES = 3                            # 로그인 실패 시 다시 시도 횟수 (처음 포함)
+LOGIN_TRIES = 2                            # 로그인 실패 시 다시 시도 횟수 (처음 포함) — 3 → 2 (2026-11-13, 실패 시도가 쌓여 계정이 막힘)
 LOGIN_RETRY_WAIT = 30                      # 다시 시도 전 기다리는 초 (8초는 너무 이르다는 요청, 2026-10-15)
+
+
+# -- 막힌 계정 쉬게 하기 (2026-11-13 요청) --------------------------------------------------------
+# 로그인을 LOGIN_TRIES 번 다 해도 '비번 불일치' / '로그인 화면에 머묾' 이면 그 계정을 '막힘' 으로 적고,
+# 시트(강언아이디)의 비밀번호가 바뀌기 전까지는 미리 로그인·작업 때 로그인을 아예 시도하지 않음.
+# (같은 폰·VPN IP 에서 틀린 시도가 쌓이면 강남언니가 계정을 막음 — 앱에서는 '잘못된 접근', 웹에서는 '비밀번호 틀림')
+BLOCKED = ROOT / "blocked_accounts.json"   # {아이디: {"pw": 막힐 때 비밀번호의 해시, "at", "phone", "why"}} — 공개 저장소 제외
+BLOCKED_MSG = "fail: 계정 막힘"
+_BLOCK_LOCK = threading.Lock()
+
+
+def _pw_hash(pw: str) -> str:
+    import hashlib
+    return hashlib.sha256(str(pw).encode("utf-8")).hexdigest()[:16]
+
+
+def blocked_accounts() -> dict:
+    try:
+        return json.loads(BLOCKED.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+
+
+def blocked_reason(account: dict) -> str:
+    """이 계정이 막힘 상태면 이유 한 줄, 아니면 ''. 시트 비밀번호가 바뀌었으면 막힘을 풀고 ''."""
+    with _BLOCK_LOCK:
+        data = blocked_accounts()
+        b = data.get(account["id"])
+        if not b:
+            return ""
+        if b.get("pw") != _pw_hash(account.get("pw", "")):     # 시트 비밀번호를 고쳤음 → 다시 시도
+            data.pop(account["id"], None)
+            BLOCKED.write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
+            return ""
+        return f"{b.get('at', '')}부터 {b.get('why', '로그인 안 됨')}"
+
+
+def mark_blocked(no: int, account: dict, why: str):
+    from datetime import datetime
+    with _BLOCK_LOCK:
+        data = blocked_accounts()
+        data[account["id"]] = {"pw": _pw_hash(account.get("pw", "")), "at": datetime.now().strftime("%m/%d %H:%M"),
+                               "phone": no, "why": why}
+        try:
+            BLOCKED.write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
+        except OSError:
+            pass
 
 
 def switch(board, dev, account: dict, log=print) -> str:
@@ -444,6 +491,10 @@ def switch(board, dev, account: dict, log=print) -> str:
 
     실패하면 최대 LOGIN_TRIES 번까지 다시 시도합니다. 맞는 비밀번호인데도 한 번씩 '불일치' 로
     튕기는 일이 있음 (2026-10-15 94번 로테3: 12:35 불일치 → 13:10 같은 계정으로 바로 성공)."""
+    blocked = blocked_reason(account)
+    if blocked:                                 # 막힌 계정 — 시도하지 않고 패스 (시트 비밀번호를 고치면 풀림)
+        log(f"  {dev.no}: {mask(account['id'])} 계정 막힘({blocked}) — 로그인 시도 안 함 (강언아이디 비밀번호를 고치면 다시 시도)")
+        return f"{BLOCKED_MSG} ({blocked}) — 강언아이디 시트 비밀번호 확인·변경 필요"
     result = ""
     for n in range(1, LOGIN_TRIES + 1):
         try:                                    # 로그인 한 번에 탭이 하나씩 늘 수 있어 시도마다 상한 확인
@@ -455,7 +506,12 @@ def switch(board, dev, account: dict, log=print) -> str:
             break
         log(f"  {dev.no}: 로그인 실패 ({result[5:].strip()}) — {LOGIN_RETRY_WAIT}초 뒤 {n + 1}/{LOGIN_TRIES}번째 다시 시도")
         time.sleep(LOGIN_RETRY_WAIT)
-    if result.startswith("fail") and LOGIN_TRIES > 1:
+    if result.startswith(WRONG_PW) or result.startswith("fail: 로그인 화면에 머묾"):
+        why = "비번 불일치" if result.startswith(WRONG_PW) else "로그인 막힘"
+        mark_blocked(dev.no, account, why)
+        log(f"  {dev.no}: {mask(account['id'])} {why} {LOGIN_TRIES}번 — 계정 막힘으로 기록, 시트 비밀번호가 바뀌기 전까지 시도 안 함")
+        result = f"{BLOCKED_MSG} ({why} {LOGIN_TRIES}번) — 강언아이디 시트 비밀번호 확인·변경 필요"
+    elif result.startswith("fail") and LOGIN_TRIES > 1:
         result = f"{result} ({LOGIN_TRIES}번 시도)"
     _record_attempt(dev.no, account["id"], result)
     _record_state(dev.no, account["id"], result)
