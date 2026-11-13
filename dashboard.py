@@ -551,6 +551,14 @@ def main():
         raise SystemExit(f"화면 파일이 없습니다: {UI}")
     if not _single_instance():
         return
+    # 콘솔(cp949)이 못 쓰는 글자('—' 등)를 print 하면 UnicodeEncodeError 로 작업·미리 로그인이 멈췄음 (11/12 94번, 11/13 70번)
+    # → 표준 출력 전체를 '못 쓰는 글자는 바꿔 쓰기' 로
+    for stream in (sys.stdout, sys.stderr, sys.__stdout__, sys.__stderr__):
+        try:
+            if stream is not None and hasattr(stream, "reconfigure"):
+                stream.reconfigure(errors="replace")
+        except (ValueError, OSError):
+            pass
     try:
         # 작업 표시줄에서 '파이썬' 이 아니라 이 프로그램으로 따로 묶이고, 창 아이콘(ui/dashboard.ico)이 보이게
         import ctypes

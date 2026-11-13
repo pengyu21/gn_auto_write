@@ -364,7 +364,10 @@ class Scheduler:
                 except Exception as exc:                # noqa: BLE001
                     self.log(f"  {j.board}번 미리 로그인 뒤 탭 정리 실패: {exc}")
             except Exception as exc:                 # noqa: BLE001
-                self.log(f"!! {j.board}번 미리 로그인 오류: {exc}")
+                self.log(f"!! {j.board}번 미리 로그인 오류: {exc} — 작업 시각({tag})에 다시 시도")
+                # 오류로 끝나도 실패처럼 이 작업 시각까지는 다시 하지 않음 (11/12~13 68·69·70번: 글자 출력 오류로 20초마다 1,347번 반복)
+                self._plan.setdefault("prep_failed", {})[str(j.board)] = tag
+                self._save()
             finally:
                 with self._lock:
                     self.busy.pop(j.board, None)
