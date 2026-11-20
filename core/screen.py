@@ -42,6 +42,11 @@ def dump(board: Board, devs, timeout: float = 60, tries: int = 2) -> dict[int, s
             if "<node" in r.stdout:
                 out[r.dev.no] = r.stdout
         pending = [d for d in pending if d.no not in out]
+    # 크롬이 웹 내용을 dump 로 넘겨주지 않는 폰(2026-11-20 98번)은 개발자 연결로 읽어 채움
+    from . import webdom
+    for d in devs:
+        if webdom.needs_fill(out.get(d.no)):
+            out[d.no] = webdom.fill(board, d, out[d.no])
     return out
 
 
