@@ -219,7 +219,10 @@ def delete(board, devs, url_for, log=print) -> dict[int, str]:
     for d in front:
         xml = screens.get(d.no)
         u = screen.url_of(xml)
-        if "unni.app/community" not in u:
+        # 지운 글 주소는 2026-11-24 부터 unni.app/404 로 넘어감 — 이미 지워진 것 (85번: 첫 시도에 지우고 재시도에서 막힘)
+        if re.search(r"unni\.app/404\b", u):
+            res[d.no] = "이미 없음"
+        elif "unni.app/community" not in u:
             res[d.no] = f"실패: 글 화면이 아님 ({u})"
         elif is_gone(xml):
             res[d.no] = "이미 없음"
