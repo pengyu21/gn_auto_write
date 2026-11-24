@@ -30,6 +30,9 @@ def _rows(xml):
     for n in nodes:
         rid = n.get("resource-id", "")
         if rid.endswith("vpn_item_title"):
+            # 상태 줄이 없는 프로필(연결 안 된 '82_1')은 다음 제목에 덮여 빠졌음 — 제목 노드 자체로 남김 (2026-11-24 82번)
+            if title is not None:
+                out.append((title.get("text", ""), title))
             title = n
         elif rid.endswith("vpn_item_subtitle"):
             out.append((title.get("text", "") if title is not None else "", n))
