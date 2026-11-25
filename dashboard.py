@@ -341,6 +341,7 @@ class Api:
     def babi_month(self, year: int, month: int) -> dict:
         rows = self._bload()
         today = date.today()
+        logins = bjob.load_state()                       # 폰별 지금 로그인 상태 ('본인인증 필요' 인지)
         days = []
         for n in range(1, calendar.monthrange(year, month)[1] + 1):
             d = date(year, month, n)
@@ -348,7 +349,7 @@ class Api:
             plan, done = self._bsched.planned(d), self._bsched.done_keys(d)
             days.append({"day": n, "week": bschedule.week_of(d), "dn": bschedule.day_of(d),
                          "skip": jobs is None,
-                         "jobs": [self._bjob(j, d, today, plan, done) for j in (jobs or [])]})
+                         "jobs": [self._bjob(j, d, today, plan, done, logins) for j in (jobs or [])]})
         return {"year": year, "month": month, "today": today.isoformat(),
                 # 홀/짝 열이 있을 때만 (2026-10-15 없앰)
                 "parity": bschedule.parity_of(date(year, month, 1)) if any(j.parity for j in rows) else "",
@@ -425,7 +426,7 @@ class Api:
             self.babi_reload(quiet=True)
         return self._brows
 
-    def _bjob(self, j: bschedule.Job, d: date, today: date, plan=None, done=None) -> dict:
+    def _bjob(self, j: bschedule.Job, d: date, today: date, plan=None, done=None, logins=None) -> dict:
         key = bschedule.key_of(j)
         state = j.state_on(d, today)
         busy = self._bsched.busy.get(j.board) if d == today else None
@@ -436,8 +437,12 @@ class Api:
         excluded = self._bsched.is_skipped(j)
         if state == "예정" and d == today and datetime.now().hour > j.hour:
             state, skipped = "미실행", True             # 자동 실행이 꺼져 있어도 지난 시간대는 지난 것으로
-        verify = "본인인증" in j.status or "본인인증" in mark
-        if verify and state in ("예정", "미실행") and (d == today or j.status.startswith("건너뜀: 본인인증")):
+        # '보류' 는 그날 실제로 본인인증 창 때문에 건너뛰었거나(mark), 그 폰이 지금 본인인증 필요 상태일 때만.
+        # 시트 '작업 여부' 의 본인인증 문구는 지난 차례 것일 수 있어 보지 않음 — 10월 차례 문구 때문에
+        # 로그인 정상인 81·82번 오늘 작업이 '보류' 로 보였음 (2026-11-25)
+        need_now = str((logins or {}).get(str(j.board), {}).get("tag", "")) == "본인인증 필요"
+        verify = "본인인증" in mark or (need_now and d >= today)
+        if verify and state in ("예정", "미실행"):
             state, skipped = "보류", False                # 본인인증 창 때문에 건너뜀 — 폰에서 직접 인증 필요
         if excluded and state in ("예정", "미실행"):
             state = "제외"
